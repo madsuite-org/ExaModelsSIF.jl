@@ -1,0 +1,721 @@
+# parser.jl — SIF file front-end: fixed-field card tokenizer + data-section
+# interpreter (DO loops, parameter arithmetic, array name expansion) producing
+# a fully instantiated problem IR, plus the ELEMENTS/GROUPS function-part
+# parser. Clean-room implementation from the published SIF reference
+# (https://www.numerical.rl.ac.uk/lancelot/sif/); no CUTEst code consulted.
+
+# ------------------------------------------------------------------ IR types
+
+struct ElType
+    name::String
+    evars::Vector{Symbol}                 # elemental variables, declaration order
+    ivars::Vector{Symbol}                 # internal variables (empty if none)
+    epars::Vector{Symbol}                 # element parameters, declaration order
+    rrows::Dict{Symbol,Vector{Pair{Symbol,Float64}}}  # ivar => [(evar => coef)]
+    temps::Vector{Pair{Symbol,Any}}       # ordered A-assignments (name => ast)
+    fexpr::Any                            # F expression ast
+end
+
+struct GType
+    name::String
+    gvar::Symbol
+    gpars::Vector{Symbol}
+    temps::Vector{Pair{Symbol,Any}}
+    fexpr::Any
+end
+
+mutable struct SIFElement
+    name::String
+    etype::String                          # "" until typed
+    varmap::Dict{Symbol,Int}               # elemental var -> problem var index
+    parvals::Dict{Symbol,Float64}
+end
+
+mutable struct SIFGroup
+    name::String
+    kind::Char                             # 'N' objective, 'E','L','G' constraint
+    gtype::Union{Nothing,String}           # nothing => use default/trivial
+    scale::Float64
+    constant::Float64
+    range_::Union{Nothing,Float64}
+    lin::Vector{Pair{Int,Float64}}         # var index => coef (duplicates summed later)
+    elems::Vector{Tuple{String,Float64}}   # (element name, weight)
+    gparvals::Dict{Symbol,Float64}
+end
+
+mutable struct SIFProblem
+    name::String
+    varnames::Vector{String}
+    varidx::Dict{String,Int}
+    lvar::Vector{Float64}
+    uvar::Vector{Float64}
+    x0::Vector{Float64}
+    grouporder::Vector{String}
+    groups::Dict{String,SIFGroup}
+    elemorder::Vector{String}
+    elements::Dict{String,SIFElement}
+    eltypes::Dict{String,ElType}
+    gtypes::Dict{String,GType}
+    default_etype::Union{Nothing,String}
+    default_gtype::Union{Nothing,String}
+    quad::Vector{Tuple{Int,Int,Float64}}   # (i, j, coef)
+end
+
+SIFProblem() = SIFProblem("", String[], Dict{String,Int}(),
+    Float64[], Float64[], Float64[],
+    String[], Dict{String,SIFGroup}(),
+    String[], Dict{String,SIFElement}(),
+    Dict{String,ElType}(), Dict{String,GType}(),
+    nothing, nothing, Tuple{Int,Int,Float64}[])
+
+# ------------------------------------------------------------------ tokenizer
+
+struct Card
+    code::String
+    f2::String
+    f3::String
+    f4::String
+    f5::String
+    f6::String
+    expr::String   # raw text from col 25 to EOL (for A/F/G/H lines)
+end
+
+function card(ln::AbstractString)
+    L = lastindex(ln)
+    g(a, b) = a <= L ? String(strip(ln[a:min(b, L)])) : ""
+    Card(g(2, 3), g(5, 14), g(15, 24), g(25, 36), g(40, 49), g(50, 61),
+         L >= 25 ? String(rstrip(ln[25:L])) : "")
+end
+
+issectionline(ln) = !isempty(ln) && !isspace(ln[1]) && ln[1] != '*'
+
+# Split raw lines into the data part and the function parts.
+function splitparts(lines)
+    datacards = Any[]                       # Card or (:section, name)
+    elemlines = String[]; grouplines = String[]
+    part = :data
+    for ln in lines
+        isempty(strip(ln)) && continue
+        startswith(ln, '*') && continue
+        if issectionline(ln)
+            toks = split(ln)
+            head = uppercase(String(toks[1]))
+            if part === :data
+                if head == "ENDATA"
+                    part = :pending
+                elseif head == "NAME"
+                    push!(datacards, (:name, length(toks) > 1 ? String(toks[2]) : ""))
+                else
+                    sec = join(toks, " ")  # e.g. "START POINT", may include trailing junk
+                    push!(datacards, (:section, uppercase(sec)))
+                end
+            else
+                if head == "ELEMENTS"
+                    part = :elements
+                elseif head == "GROUPS"
+                    part = :groups
+                elseif head == "ENDATA"
+                    part = :pending
+                elseif part === :elements
+                    push!(elemlines, ln)
+                elseif part === :groups
+                    push!(grouplines, ln)
+                end
+            end
+        else
+            if part === :data
+                push!(datacards, card(ln))
+            elseif part === :elements
+                push!(elemlines, ln)
+            elseif part === :groups
+                push!(grouplines, ln)
+            end
+        end
+    end
+    return datacards, elemlines, grouplines
+end
+
+# ------------------------------------------------------------- interpreter
+
+mutable struct State
+    P::SIFProblem
+    section::String
+    ip::Dict{String,Int}
+    rp::Dict{String,Float64}
+    loopfinal::Symbol          # :last or :fortran
+    # bound/start defaults bookkeeping
+    firstbound::Bool           # whether any explicit per-var bound seen yet
+end
+
+parsenum(s::AbstractString) = parse(Float64, replace(s, r"[dD]" => "e"))
+
+function resolveint(st::State, tok::AbstractString)
+    v = tryparse(Int, tok)
+    v !== nothing && return v
+    haskey(st.ip, tok) && return st.ip[tok]
+    error("undefined integer parameter '$tok'")
+end
+
+"Expand an array name like X(I+1) or Y(1,J) to its flat instantiated name."
+function expandname(st::State, name::AbstractString)
+    i = findfirst('(', name)
+    i === nothing && return String(name)
+    endswith(name, ')') || error("malformed array name '$name'")
+    base = name[1:i-1]
+    inner = name[i+1:end-1]
+    idx = [string(resolveint(st, strip(tok))) for tok in split(inner, ',')]
+    return base * join(idx, ",")
+end
+
+getrp(st::State, tok::AbstractString) = begin
+    t = expandname(st, tok)
+    haskey(st.rp, t) || error("undefined real parameter '$t'")
+    st.rp[t]
+end
+
+const IPARAM = Set(["IE", "IA", "IS", "IM", "ID", "I=", "I+", "I-", "I*", "I/"])
+const RPARAM = Set(["RE", "RA", "RS", "RM", "RD", "R=", "R+", "R-", "R*", "R/",
+                    "RI", "RF", "R("])
+
+function handle_iparam!(st::State, cd::Card)
+    dest = expandname(st, cd.f2)
+    c = cd.code
+    if c == "IE"
+        st.ip[dest] = resolveint(st, cd.f4)
+    elseif c == "IA"
+        st.ip[dest] = st.ip[expandname(st, cd.f3)] + resolveint(st, cd.f4)
+    elseif c == "IS"
+        st.ip[dest] = resolveint(st, cd.f4) - st.ip[expandname(st, cd.f3)]
+    elseif c == "IM"
+        st.ip[dest] = st.ip[expandname(st, cd.f3)] * resolveint(st, cd.f4)
+    elseif c == "ID"
+        st.ip[dest] = div(resolveint(st, cd.f4), st.ip[expandname(st, cd.f3)])
+    elseif c == "I="
+        st.ip[dest] = st.ip[expandname(st, cd.f3)]
+    elseif c == "I+"
+        st.ip[dest] = st.ip[expandname(st, cd.f3)] + st.ip[expandname(st, cd.f5)]
+    elseif c == "I-"
+        st.ip[dest] = st.ip[expandname(st, cd.f3)] - st.ip[expandname(st, cd.f5)]
+    elseif c == "I*"
+        st.ip[dest] = st.ip[expandname(st, cd.f3)] * st.ip[expandname(st, cd.f5)]
+    elseif c == "I/"
+        st.ip[dest] = div(st.ip[expandname(st, cd.f3)], st.ip[expandname(st, cd.f5)])
+    end
+end
+
+function handle_rparam!(st::State, cd::Card)
+    dest = expandname(st, cd.f2)
+    c = cd.code
+    if c == "RE"
+        st.rp[dest] = parsenum(cd.f4)
+    elseif c == "RA"
+        st.rp[dest] = st.rp[expandname(st, cd.f3)] + parsenum(cd.f4)
+    elseif c == "RS"
+        st.rp[dest] = parsenum(cd.f4) - st.rp[expandname(st, cd.f3)]
+    elseif c == "RM"
+        st.rp[dest] = st.rp[expandname(st, cd.f3)] * parsenum(cd.f4)
+    elseif c == "RD"
+        st.rp[dest] = parsenum(cd.f4) / st.rp[expandname(st, cd.f3)]
+    elseif c == "R="
+        st.rp[dest] = st.rp[expandname(st, cd.f3)]
+    elseif c == "R+"
+        st.rp[dest] = st.rp[expandname(st, cd.f3)] + st.rp[expandname(st, cd.f5)]
+    elseif c == "R-"
+        st.rp[dest] = st.rp[expandname(st, cd.f3)] - st.rp[expandname(st, cd.f5)]
+    elseif c == "R*"
+        st.rp[dest] = st.rp[expandname(st, cd.f3)] * st.rp[expandname(st, cd.f5)]
+    elseif c == "R/"
+        st.rp[dest] = st.rp[expandname(st, cd.f3)] / st.rp[expandname(st, cd.f5)]
+    elseif c == "RI"
+        st.rp[dest] = Float64(st.ip[expandname(st, cd.f3)])
+    elseif c == "RF"
+        st.rp[dest] = rfun(cd.f3)(parsenum(cd.f4))
+    elseif c == "R("
+        st.rp[dest] = rfun(cd.f3)(getrp(st, cd.f5))
+    end
+end
+
+function rfun(name)
+    f = get(JLFUN, Symbol(uppercase(String(name))), nothing)
+    f === nothing && error("unsupported parameter function '$name'")
+    return f
+end
+
+# -------- problem-object helpers
+
+function getvar!(st::State, name::AbstractString)
+    P = st.P
+    haskey(P.varidx, name) && return P.varidx[name]
+    push!(P.varnames, String(name))
+    push!(P.lvar, 0.0)        # SIF default bounds: [0, +Inf)
+    push!(P.uvar, Inf)
+    push!(P.x0, 0.0)
+    P.varidx[name] = length(P.varnames)
+end
+
+function getgroup!(st::State, name::AbstractString, kind::Union{Nothing,Char})
+    P = st.P
+    if haskey(P.groups, name)
+        g = P.groups[name]
+        kind !== nothing && g.kind != kind &&
+            error("group $name redeclared with kind $kind (was $(g.kind))")
+        return g
+    end
+    kind === nothing && error("group '$name' referenced before declaration")
+    g = SIFGroup(String(name), kind, nothing, 1.0, 0.0, nothing,
+                 Pair{Int,Float64}[], Tuple{String,Float64}[], Dict{Symbol,Float64}())
+    P.groups[name] = g
+    push!(P.grouporder, String(name))
+    return g
+end
+
+function getelem!(st::State, name::AbstractString)
+    P = st.P
+    haskey(P.elements, name) && return P.elements[name]
+    e = SIFElement(String(name), "", Dict{Symbol,Int}(), Dict{Symbol,Float64}())
+    P.elements[name] = e
+    push!(P.elemorder, String(name))
+    return e
+end
+
+unquote(s) = startswith(s, '\'') && endswith(s, '\'') ? s[2:end-1] : s
+
+# -------- section card handlers
+
+function handle_card!(st::State, cd::Card)
+    code = cd.code
+    code in IPARAM && return handle_iparam!(st, cd)
+    code in RPARAM && return handle_rparam!(st, cd)
+    sec = st.section
+    if sec == "VARIABLES" || sec == "COLUMNS"
+        handle_variables!(st, cd)
+    elseif sec == "GROUPS" || sec == "ROWS" || sec == "CONSTRAINTS"
+        handle_groups!(st, cd)
+    elseif sec == "CONSTANTS" || sec == "RHS" || sec == "RHS'"
+        handle_constants!(st, cd)
+    elseif sec == "RANGES"
+        handle_ranges!(st, cd)
+    elseif sec == "BOUNDS"
+        handle_bounds!(st, cd)
+    elseif sec == "START POINT"
+        handle_start!(st, cd)
+    elseif sec in ("QUADRATIC", "QUADS", "QUADOBJ", "HESSIAN")
+        handle_quadratic!(st, cd)
+    elseif sec == "ELEMENT TYPE"
+        handle_eltype!(st, cd)
+    elseif sec == "ELEMENT USES"
+        handle_eluses!(st, cd)
+    elseif sec == "GROUP TYPE"
+        handle_gtype!(st, cd)
+    elseif sec == "GROUP USES"
+        handle_guses!(st, cd)
+    elseif sec == "OBJECT BOUND"
+        return
+    else
+        error("card in unsupported section '$sec' (code '$code')")
+    end
+end
+
+function handle_variables!(st::State, cd::Card)
+    cd.code in ("", "X") || error("unsupported VARIABLES code '$(cd.code)' (integer markers unsupported)")
+    v = getvar!(st, expandname(st, cd.f2))
+    # COLUMNS-style (group, coef) pairs
+    for (gn, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
+        isempty(gn) && continue
+        g = getgroup!(st, expandname(st, gn), nothing)
+        push!(g.lin, v => parsenum(val))
+    end
+end
+
+function handle_groups!(st::State, cd::Card)
+    code = cd.code
+    kindc = code[end]
+    kindc in ('N', 'E', 'G', 'L') ||
+        error("unsupported GROUPS code '$code'")
+    prefix = length(code) == 2 ? code[1] : ' '
+    g = getgroup!(st, expandname(st, cd.f2), kindc)
+    if unquote(cd.f3) == "SCALE"
+        g.scale = prefix == 'Z' ? getrp(st, cd.f5) : parsenum(cd.f4)
+        return
+    end
+    if prefix == 'Z'
+        isempty(cd.f3) && return
+        v = getvar!(st, expandname(st, cd.f3))
+        push!(g.lin, v => getrp(st, cd.f5))
+    else
+        for (vn, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
+            isempty(vn) && continue
+            v = getvar!(st, expandname(st, vn))
+            push!(g.lin, v => parsenum(val))
+        end
+    end
+end
+
+function handle_constants!(st::State, cd::Card)
+    code = cd.code
+    if startswith(code, "Z")
+        g = getgroup!(st, expandname(st, cd.f3), nothing)
+        g.constant = getrp(st, cd.f5)
+        return
+    end
+    for (gn, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
+        isempty(gn) && continue
+        if unquote(gn) == "DEFAULT"
+            v = parsenum(val)
+            for g in values(st.P.groups); g.constant = v; end
+        else
+            g = getgroup!(st, expandname(st, gn), nothing)
+            g.constant = parsenum(val)
+        end
+    end
+end
+
+function handle_ranges!(st::State, cd::Card)
+    code = cd.code
+    if startswith(code, "Z")
+        g = getgroup!(st, expandname(st, cd.f3), nothing)
+        g.range_ = getrp(st, cd.f5)
+        return
+    end
+    for (gn, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
+        isempty(gn) && continue
+        g = getgroup!(st, expandname(st, gn), nothing)
+        g.range_ = parsenum(val)
+    end
+end
+
+function eachboundvar(st::State, tok)
+    P = st.P
+    return unquote(tok) == "DEFAULT" ? (1:length(P.varnames)) :
+        (P.varidx[expandname(st, tok)]:P.varidx[expandname(st, tok)])
+end
+
+function handle_bounds!(st::State, cd::Card)
+    code = cd.code
+    P = st.P
+    vs = eachboundvar(st, cd.f3)
+    if code in ("FR", "XR", "ZR")
+        for v in vs; P.lvar[v] = -Inf; P.uvar[v] = Inf; end
+    elseif code in ("MI", "XM", "ZM")
+        for v in vs; P.lvar[v] = -Inf; end
+    elseif code in ("PL", "XP", "ZP")
+        for v in vs; P.uvar[v] = Inf; end
+    elseif code in ("LO", "XL", "ZL", "UP", "XU", "ZU", "FX", "XX", "ZX")
+        val = startswith(code, "Z") ? getrp(st, cd.f5) : parsenum(cd.f4)
+        if code in ("LO", "XL", "ZL")
+            for v in vs; P.lvar[v] = val; end
+        elseif code in ("UP", "XU", "ZU")
+            for v in vs; P.uvar[v] = val; end
+        else
+            for v in vs; P.lvar[v] = val; P.uvar[v] = val; end
+        end
+    else
+        error("unsupported BOUNDS code '$code'")
+    end
+end
+
+function handle_start!(st::State, cd::Card)
+    code = cd.code
+    P = st.P
+    code in ("", "X", "V", "XV", "ZV") ||
+        return   # dual-value starts and other exotics: ignore
+    if code == "ZV"
+        tok = cd.f3
+        val = getrp(st, cd.f5)
+        if unquote(tok) == "DEFAULT"
+            fill!(P.x0, val)
+        else
+            P.x0[P.varidx[expandname(st, tok)]] = val
+        end
+        return
+    end
+    for (tok, sval) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
+        isempty(tok) && continue
+        val = parsenum(sval)
+        if unquote(tok) == "DEFAULT"
+            fill!(P.x0, val)
+        else
+            P.x0[P.varidx[expandname(st, tok)]] = val
+        end
+    end
+end
+
+function handle_quadratic!(st::State, cd::Card)
+    code = cd.code
+    i = getvar!(st, expandname(st, cd.f2))
+    if startswith(code, "Z")
+        j = getvar!(st, expandname(st, cd.f3))
+        push!(st.P.quad, (i, j, getrp(st, cd.f5)))
+        return
+    end
+    for (vn, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
+        isempty(vn) && continue
+        j = getvar!(st, expandname(st, vn))
+        push!(st.P.quad, (i, j, parsenum(val)))
+    end
+end
+
+# element/group type DECLARATIONS are accumulated here, their function bodies
+# attached later by the function-part parser.
+mutable struct TypeDecl
+    evars::Vector{Symbol}
+    ivars::Vector{Symbol}
+    epars::Vector{Symbol}
+end
+const _typedecls = Dict{String,TypeDecl}()   # reset per parse (stored in State? kept simple)
+
+function handle_eltype!(st::State, cd::Card)
+    code = cd.code
+    d = get!(_typedecls, cd.f2, TypeDecl(Symbol[], Symbol[], Symbol[]))
+    tgt = code == "EV" ? d.evars : code == "IV" ? d.ivars : code == "EP" ? d.epars :
+        error("unsupported ELEMENT TYPE code '$code'")
+    for tok in (cd.f3, cd.f5)
+        isempty(tok) && continue
+        push!(tgt, Symbol(tok))
+    end
+end
+
+function handle_eluses!(st::State, cd::Card)
+    code = cd.code
+    if code in ("T", "XT")
+        if unquote(cd.f2) == "DEFAULT"
+            st.P.default_etype = cd.f3
+        else
+            e = getelem!(st, expandname(st, cd.f2))
+            e.etype = cd.f3
+        end
+    elseif code in ("V", "XV", "ZV")
+        e = getelem!(st, expandname(st, cd.f2))
+        e.varmap[Symbol(cd.f3)] = getvar!(st, expandname(st, cd.f5))
+    elseif code in ("P", "XP")
+        e = getelem!(st, expandname(st, cd.f2))
+        for (pn, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
+            isempty(pn) && continue
+            e.parvals[Symbol(pn)] = parsenum(val)
+        end
+    elseif code == "ZP"
+        e = getelem!(st, expandname(st, cd.f2))
+        e.parvals[Symbol(cd.f3)] = getrp(st, cd.f5)
+    else
+        error("unsupported ELEMENT USES code '$code'")
+    end
+end
+
+function handle_gtype!(st::State, cd::Card)
+    code = cd.code
+    d = get!(_typedecls, "G#" * cd.f2, TypeDecl(Symbol[], Symbol[], Symbol[]))
+    if code == "GV"
+        push!(d.evars, Symbol(cd.f3))
+    elseif code == "GP"
+        for tok in (cd.f3, cd.f5)
+            isempty(tok) && continue
+            push!(d.epars, Symbol(tok))
+        end
+    else
+        error("unsupported GROUP TYPE code '$code'")
+    end
+end
+
+function handle_guses!(st::State, cd::Card)
+    code = cd.code
+    if code in ("T", "XT")
+        if unquote(cd.f2) == "DEFAULT"
+            st.P.default_gtype = cd.f3
+        else
+            g = getgroup!(st, expandname(st, cd.f2), nothing)
+            g.gtype = cd.f3
+        end
+    elseif code in ("E", "XE")
+        g = getgroup!(st, expandname(st, cd.f2), nothing)
+        for (en, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
+            isempty(en) && continue
+            w = isempty(val) ? 1.0 : parsenum(val)
+            push!(g.elems, (expandname(st, en), w))
+        end
+    elseif code == "ZE"
+        g = getgroup!(st, expandname(st, cd.f2), nothing)
+        push!(g.elems, (expandname(st, cd.f3), getrp(st, cd.f5)))
+    elseif code in ("P", "XP")
+        g = getgroup!(st, expandname(st, cd.f2), nothing)
+        for (pn, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
+            isempty(pn) && continue
+            g.gparvals[Symbol(pn)] = parsenum(val)
+        end
+    elseif code == "ZP"
+        g = getgroup!(st, expandname(st, cd.f2), nothing)
+        g.gparvals[Symbol(cd.f3)] = getrp(st, cd.f5)
+    else
+        error("unsupported GROUP USES code '$code'")
+    end
+end
+
+# -------- card list execution with DO loops
+
+function run_cards!(st::State, cards, i0::Int, i1::Int)
+    i = i0
+    while i <= i1
+        cd = cards[i]
+        if cd isa Tuple
+            if cd[1] === :section
+                st.section = cd[2]
+            elseif cd[1] === :name
+                st.P.name = cd[2]
+            end
+            i += 1
+            continue
+        end
+        if cd.code == "DO"
+            var = cd.f2
+            lo = resolveint(st, cd.f3)
+            hi = resolveint(st, cd.f5)
+            step = 1
+            j = i + 1
+            while j <= i1 && cards[j] isa Card && cards[j].code == "DI"
+                step = resolveint(st, cards[j].f3)
+                j += 1
+            end
+            depth = 1
+            k = j
+            while k <= i1
+                c2 = cards[k]
+                if c2 isa Card
+                    c2.code == "DO" && (depth += 1)
+                    if c2.code == "ND" || c2.code == "OD"
+                        depth -= 1
+                        depth == 0 && break
+                    end
+                end
+                k += 1
+            end
+            depth == 0 || error("unterminated DO loop")
+            v = lo
+            while (step > 0 ? v <= hi : v >= hi)
+                st.ip[var] = v
+                run_cards!(st, cards, j, k - 1)
+                v += step
+            end
+            # loop variable value after completion (calibrated vs SIFDecode)
+            st.ip[var] = st.loopfinal === :fortran ? v : hi
+            i = k + 1
+        elseif cd.code == "ND" || cd.code == "OD" || cd.code == "DI"
+            error("loop control card outside loop")
+        else
+            handle_card!(st, cd)
+            i += 1
+        end
+    end
+end
+
+# -------- function-part (ELEMENTS / GROUPS) parser
+
+function parse_funpart(lines, isgroup::Bool)
+    temps_global = Pair{Symbol,Any}[]
+    blocks = Dict{String,NamedTuple}()
+    cur = nothing            # current type name
+    curtemps = Pair{Symbol,Any}[]
+    currows = Dict{Symbol,Vector{Pair{Symbol,Float64}}}()
+    curf = nothing
+    section = ""
+    pend_code = ""           # for continuation lines
+    pend_name = Symbol("")
+    pend_expr = ""
+    pend2 = Symbol("")
+
+    function flushpend!()
+        isempty(pend_code) && return
+        if pend_code == "A"
+            push!(section == "GLOBALS" ? temps_global : curtemps,
+                  pend_name => fparse(pend_expr))
+        elseif pend_code == "F"
+            curf = fparse(pend_expr)
+        end
+        pend_code = ""
+    end
+    function flushblock!()
+        flushpend!()
+        cur === nothing && return
+        blocks[cur] = (temps = curtemps, rows = currows, fexpr = curf)
+        cur = nothing
+    end
+
+    for ln in lines
+        if issectionline(ln)
+            flushpend!()
+            section = uppercase(String(split(ln)[1]))
+            continue
+        end
+        cd = card(ln)
+        code = cd.code
+        if endswith(code, "+") && !isempty(pend_code)
+            pend_expr *= " " * cd.expr
+            continue
+        end
+        flushpend!()
+        if section == "TEMPORARIES"
+            continue  # R/I/M/L declarations carry no information we need
+        elseif section == "GLOBALS"
+            if code == "A"
+                pend_code = "A"; pend_name = Symbol(cd.f2); pend_expr = cd.expr
+            end
+        elseif section == "INDIVIDUALS"
+            if code == "T"
+                flushblock!()
+                cur = cd.f2
+                curtemps = Pair{Symbol,Any}[]
+                currows = Dict{Symbol,Vector{Pair{Symbol,Float64}}}()
+                curf = nothing
+            elseif code == "A"
+                pend_code = "A"; pend_name = Symbol(cd.f2); pend_expr = cd.expr
+            elseif code == "F"
+                pend_code = "F"; pend_expr = cd.expr
+            elseif code == "G" || code == "H"
+                pend_code = "G"; pend_expr = cd.expr   # parsed then discarded
+            elseif code == "R"
+                rows = get!(currows, Symbol(cd.f2), Pair{Symbol,Float64}[])
+                for (vn, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
+                    isempty(vn) && continue
+                    push!(rows, Symbol(vn) => parsenum(val))
+                end
+            elseif code == "E"
+                error("unsupported INDIVIDUALS code 'E'")
+            end
+        end
+    end
+    flushblock!()
+    return temps_global, blocks
+end
+
+# ------------------------------------------------------------------ driver
+
+"""
+    sif_decode(path; loopfinal = :last) -> SIFProblem
+
+Parse and interpret a SIF file into a fully instantiated `SIFProblem` IR.
+"""
+function sif_decode(path::AbstractString; loopfinal::Symbol = :last)
+    lines = readlines(path)
+    datacards, elemlines, grouplines = splitparts(lines)
+    empty!(_typedecls)
+    st = State(SIFProblem(), "", Dict{String,Int}(), Dict{String,Float64}(),
+               loopfinal, false)
+    run_cards!(st, datacards, 1, length(datacards))
+    P = st.P
+
+    gtemps_e, eblocks = parse_funpart(elemlines, false)
+    gtemps_g, gblocks = parse_funpart(grouplines, true)
+
+    for (tname, blk) in eblocks
+        d = get(_typedecls, tname, nothing)
+        d === nothing && error("element type $tname has a function body but no declaration")
+        P.eltypes[tname] = ElType(tname, d.evars, d.ivars, d.epars, blk.rows,
+                                  vcat(gtemps_e, blk.temps), blk.fexpr)
+    end
+    for (tname, blk) in gblocks
+        d = get(_typedecls, "G#" * tname, nothing)
+        d === nothing && error("group type $tname has a function body but no declaration")
+        isempty(d.evars) && error("group type $tname has no GV variable")
+        P.gtypes[tname] = GType(tname, d.evars[1], d.epars,
+                                vcat(gtemps_g, blk.temps), blk.fexpr)
+    end
+    return P
+end

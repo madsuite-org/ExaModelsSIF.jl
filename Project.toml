@@ -1,0 +1,17 @@
+name = "ExaModelsSIF"
+uuid = "7f0b2a4e-8c3d-4a9b-9e6f-5b2a1c9d8e01"
+version = "0.1.0"
+authors = ["Sungho Shin <sushin@mit.edu>"]
+
+[deps]
+CUTEst = "1b53aba6-35b6-5f92-a507-53c67d53f819"
+ExaModels = "1037b233-b668-4ce9-9b63-f9f681f55dd2"
+NLPModels = "a4795742-8479-5a88-8948-cc11e1c8c1a6"
+
+[sources]
+ExaModels = {path = "/home/sushin/git/pkg/ExaModels.jl"}
+
+[compat]
+CUTEst = "1.4.0"
+NLPModels = "0.21.12"
+julia = "1.10"
