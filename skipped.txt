@@ -1,0 +1,2 @@
+# Instances pending ExaModels issue #331 (reduction over many buffered stages):
+# FMINSURF/ODNAMUR/POWER/PENALTY1 class fails fast with "reduction-tree lowering pending".
