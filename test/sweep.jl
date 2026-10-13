@@ -50,7 +50,7 @@ function run_sweep()
                 detail = sprint(showerror, err)
             end
             if isempty(status)
-                if nvar > 200_000
+                if nvar > 2_000_000
                     status = "SKIP_BUILD"
                 else
                     try
