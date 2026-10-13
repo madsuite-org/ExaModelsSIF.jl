@@ -1,1 +1,4 @@
-sweep_results.tsv
+sweep_results*.tsv
+current*.txt
+sweep_progress*.log
+driver.out

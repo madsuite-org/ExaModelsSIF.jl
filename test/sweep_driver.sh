@@ -1,13 +1,32 @@
 #!/bin/bash
-# Restart-on-chunk / resume-on-crash driver for test/sweep.jl.
+# Parallel restart-on-chunk / resume-on-crash driver for test/sweep.jl.
+# Usage: sweep_driver.sh [NSHARDS]   (default 8)
+# Env: SIF_DIR overrides the collection; SWEEP_ONLY=<file> restricts to names.
 cd "$(dirname "$0")/.." || exit 1
-for i in $(seq 1 40); do
-    julia --project=. --heap-size-hint=16G test/sweep.jl >> sweep_progress.log 2>&1
-    rc=$?
-    echo "driver: pass $i exited rc=$rc" >> sweep_progress.log
-    [ "$rc" -eq 42 ] && continue          # chunk boundary: restart julia
-    [ "$rc" -eq 0 ] && exit 0             # sweep done
-    sleep 5                               # crash: resume (culprit recorded)
+N=${1:-8}
+JULIA="$HOME/.juliaup/bin/julia"   # absolute: non-interactive ssh has no juliaup PATH
+onesweep() {
+    local shard=$1
+    for i in $(seq 1 60); do
+        SWEEP_SHARD=$shard SWEEP_NSHARDS=$N \
+            "$JULIA" --project=. --heap-size-hint=6G test/sweep.jl \
+            >> "sweep_progress.$shard.log" 2>&1
+        rc=$?
+        echo "driver[$shard]: pass $i rc=$rc" >> "sweep_progress.$shard.log"
+        [ "$rc" -eq 42 ] && continue
+        [ "$rc" -eq 0 ] && return 0
+        sleep 5
+    done
+    echo "driver[$shard]: retry budget exhausted" >> "sweep_progress.$shard.log"
+    return 1
+}
+pids=()
+for s in $(seq 0 $((N-1))); do
+    onesweep "$s" &
+    pids+=($!)
 done
-echo "driver: retry budget exhausted" >> sweep_progress.log
-exit 1
+fail=0
+for p in "${pids[@]}"; do wait "$p" || fail=1; done
+cat sweep_results.*.tsv > sweep_results.tsv 2>/dev/null
+echo "merged $(wc -l < sweep_results.tsv) results; fail=$fail"
+exit $fail
