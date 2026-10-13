@@ -9,6 +9,11 @@ ENV["MASTSIF"] = get(ENV, "MASTSIF", "/home/sushin/.julia/artifacts/1fa01d4c3b34
 # the reference gradient while ours matches (see STATUS.md)
 const HESS_REF_BUGS = Set(["GULF"])
 
+# ill-conditioned problems where the Fortran reference itself carries float
+# noise: BigFloat adjudication (2026-10-13) puts OUR Float64 at 7e-15 of the
+# true value and CUTEst at 2.8e-6 (VANDERM3). Compared at a loosened 1e-4.
+const REF_NOISE = Set(["VANDERM1", "VANDERM2", "VANDERM3", "VANDERM4"])
+
 const PILOT = ["ROSENBR", "HS1", "HS2", "HS3", "HS4", "HS5", "HS6", "HS7",
     "HS10", "HS11", "HS14", "HS21", "HS26", "HS28", "HS35", "HS45",
     "BOOTH", "ZANGWIL3", "TAME", "ALSOTAME", "DEGDIAG", "GENHS28",
@@ -73,7 +78,7 @@ function refconnames(ref)
     return [String(strip(join(Char(UInt8(c)) for c in cname[:, i]))) for i in 1:m]
 end
 
-function check(name; tol = 1e-6)
+function check(name; tol = name in REF_NOISE ? 1e-4 : 1e-6)
     msgs = String[]
     bad(s) = push!(msgs, s)
     ref = CUTEstModel(name)
