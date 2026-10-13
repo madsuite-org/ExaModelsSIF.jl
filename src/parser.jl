@@ -50,6 +50,7 @@ mutable struct SIFProblem
     lvar::Vector{Float64}
     uvar::Vector{Float64}
     x0::Vector{Float64}
+    varscale::Vector{Float64}
     grouporder::Vector{String}
     groups::Dict{String,SIFGroup}
     elemorder::Vector{String}
@@ -62,7 +63,7 @@ mutable struct SIFProblem
 end
 
 SIFProblem() = SIFProblem("", String[], Dict{String,Int}(),
-    Float64[], Float64[], Float64[],
+    Float64[], Float64[], Float64[], Float64[],
     String[], Dict{String,SIFGroup}(),
     String[], Dict{String,SIFElement}(),
     Dict{String,ElType}(), Dict{String,GType}(),
@@ -81,6 +82,8 @@ struct Card
 end
 
 function card(ln::AbstractString)
+    di = findfirst(" \$", ln)
+    di !== nothing && (ln = ln[1:first(di)-1])
     L = lastindex(ln)
     g(a, b) = a <= L ? String(strip(ln[a:min(b, L)])) : ""
     Card(g(2, 3), g(5, 14), g(15, 24), g(25, 36), g(40, 49), g(50, 61),
@@ -143,8 +146,7 @@ mutable struct State
     ip::Dict{String,Int}
     rp::Dict{String,Float64}
     loopfinal::Symbol          # :last or :fortran
-    # bound/start defaults bookkeeping
-    firstbound::Bool           # whether any explicit per-var bound seen yet
+    firstset::Dict{String,String}  # section => first set name seen (field 2)
 end
 
 parsenum(s::AbstractString) =
@@ -154,6 +156,12 @@ function resolveint(st::State, tok::AbstractString)
     v = tryparse(Int, tok)
     v !== nothing && return v
     haskey(st.ip, tok) && return st.ip[tok]
+    if occursin('(', tok)
+        t = expandname(st, tok)
+        haskey(st.ip, t) && return st.ip[t]
+        v = tryparse(Int, t)
+        v !== nothing && return v
+    end
     error("undefined integer parameter '$tok'")
 end
 
@@ -172,7 +180,7 @@ getrp(st::State, tok::AbstractString) = begin
     st.rp[t]
 end
 
-const IPARAM = Set(["IE", "IA", "IS", "IM", "ID", "I=", "I+", "I-", "I*", "I/"])
+const IPARAM = Set(["IE", "IA", "IS", "IM", "ID", "I=", "I+", "I-", "I*", "I/", "IR"])
 const RPARAM = Set(["RE", "RA", "RS", "RM", "RD", "R=", "R+", "R-", "R*", "R/",
                     "RI", "RF", "R("])
 # Array real-parameter codes: identical semantics to the R-codes, with array
@@ -184,6 +192,9 @@ const APARAM = Dict("AE" => "RE", "AA" => "RA", "AS" => "RS", "AM" => "RM",
 function handle_iparam!(st::State, cd::Card)
     dest = expandname(st, cd.f2)
     c = cd.code
+    if c in ("IA", "IS", "IM", "ID") && isempty(cd.f4)
+        c = c == "IA" ? "I+" : c == "IS" ? "I-" : c == "IM" ? "I*" : "I/"
+    end
     if c == "IE"
         st.ip[dest] = resolveint(st, cd.f4)
     elseif c == "IA"
@@ -204,12 +215,20 @@ function handle_iparam!(st::State, cd::Card)
         st.ip[dest] = st.ip[expandname(st, cd.f3)] * st.ip[expandname(st, cd.f5)]
     elseif c == "I/"
         st.ip[dest] = div(st.ip[expandname(st, cd.f3)], st.ip[expandname(st, cd.f5)])
+    elseif c == "IR"
+        st.ip[dest] = trunc(Int, st.rp[expandname(st, cd.f3)])
     end
 end
 
 function handle_rparam!(st::State, cd::Card)
     dest = expandname(st, cd.f2)
     c = cd.code
+    # RA/RS/RM/RD with an empty value field take a PARAMETER operand in field 5
+    # and act like their two-parameter cousins (f3 op f5), e.g.
+    # "RD DP/NI  DP  RNI" means DP/NI := DP / RNI.
+    if c in ("RA", "RS", "RM", "RD") && isempty(cd.f4)
+        c = c == "RA" ? "R+" : c == "RS" ? "R-" : c == "RM" ? "R*" : "R/"
+    end
     if c == "RE"
         st.rp[dest] = parsenum(cd.f4)
     elseif c == "RA"
@@ -254,6 +273,7 @@ function getvar!(st::State, name::AbstractString)
     push!(P.lvar, 0.0)        # SIF default bounds: [0, +Inf)
     push!(P.uvar, Inf)
     push!(P.x0, 0.0)
+    push!(P.varscale, 1.0)
     P.varidx[name] = length(P.varnames)
 end
 
@@ -293,6 +313,13 @@ function handle_card!(st::State, cd::Card)
     haskey(APARAM, code) && return handle_rparam!(st,
         Card(APARAM[code], cd.f2, cd.f3, cd.f4, cd.f5, cd.f6, cd.expr))
     sec = st.section
+    # Only the first named set applies in these sections; later sets are
+    # alternative constants/bounds/starts (e.g. recorded solutions).
+    if sec in ("CONSTANTS", "RHS", "RHS'", "RANGES", "BOUNDS", "START POINT") &&
+       !isempty(cd.f2)
+        fs = get!(st.firstset, sec, cd.f2)
+        fs == cd.f2 || return
+    end
     if sec == "VARIABLES" || sec == "COLUMNS"
         handle_variables!(st, cd)
     elseif sec == "GROUPS" || sec == "ROWS" || sec == "CONSTRAINTS"
@@ -323,11 +350,27 @@ function handle_card!(st::State, cd::Card)
 end
 
 function handle_variables!(st::State, cd::Card)
-    cd.code in ("", "X") || error("unsupported VARIABLES code '$(cd.code)' (integer markers unsupported)")
+    cd.code in ("", "X", "Z") ||
+        error("unsupported VARIABLES code '$(cd.code)'")
     v = getvar!(st, expandname(st, cd.f2))
-    # COLUMNS-style (group, coef) pairs
+    if unquote(cd.f3) == "SCALE"
+        # Variable scale factors are LANCELOT hints; SIFdecode/CUTEst evaluate
+        # the UNSCALED problem (calibrated on MEYER3: ref x0/obj are the raw
+        # SIF values). Parsed and discarded.
+        return
+    end
+    if cd.code == "Z"
+        isempty(cd.f3) && return
+        g = getgroup!(st, expandname(st, cd.f3), nothing)
+        push!(g.lin, v => getrp(st, cd.f5))
+        return
+    end
+    # COLUMNS-style (group, coef) pairs; INTEGER/CONTINUOUS markers are
+    # accepted and ignored (continuous relaxation, as CUTEst evaluates it)
     for (gn, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
         isempty(gn) && continue
+        unquote(gn) in ("INTEGER", "CONTINUOUS") && continue
+        gn == "INTEGER" && continue
         g = getgroup!(st, expandname(st, gn), nothing)
         push!(g.lin, v => parsenum(val))
     end
@@ -680,14 +723,15 @@ function parse_funpart(lines, isgroup::Bool)
                 pend_code = "F"; pend_expr = cd.expr
             elseif code == "G" || code == "H"
                 pend_code = "G"; pend_expr = cd.expr   # parsed then discarded
+            elseif code == "I" || code == "E"
+                push!(curtemps, Symbol(cd.f3) =>
+                    CondAssign(Symbol(cd.f2), code == "I", fparse(cd.expr)))
             elseif code == "R"
                 rows = get!(currows, Symbol(cd.f2), Pair{Symbol,Float64}[])
                 for (vn, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
                     isempty(vn) && continue
                     push!(rows, Symbol(vn) => parsenum(val))
                 end
-            elseif code == "E"
-                error("unsupported INDIVIDUALS code 'E'")
             end
         end
     end
@@ -707,7 +751,7 @@ function sif_decode(path::AbstractString; loopfinal::Symbol = :last)
     datacards, elemlines, grouplines = splitparts(lines)
     empty!(_typedecls)
     st = State(SIFProblem(), "", Dict{String,Int}(), Dict{String,Float64}(),
-               loopfinal, false)
+               loopfinal, Dict{String,String}())
     run_cards!(st, datacards, 1, length(datacards))
     P = st.P
 

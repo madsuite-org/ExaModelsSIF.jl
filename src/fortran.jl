@@ -5,6 +5,13 @@
 "Parse a SIF/Fortran expression string into a Julia AST."
 function fparse(s::AbstractString)
     t = replace(String(s), "**" => "^")
+    # Fortran logical operators (used in conditional temporaries)
+    t = replace(t,
+        r"\.LE\."i => " <= ", r"\.LT\."i => " < ",
+        r"\.GE\."i => " >= ", r"\.GT\."i => " > ",
+        r"\.EQ\."i => " == ", r"\.NE\."i => " != ",
+        r"\.AND\."i => " && ", r"\.OR\."i => " || ",
+        r"\.NOT\."i => " !", r"\.TRUE\."i => " true ", r"\.FALSE\."i => " false ")
     # Fortran D exponents: 1.0D0, 2.D-3, .5D+2 -> e
     t = replace(t, r"(?<=[0-9.])[dD](?=[+-]?[0-9])" => "e")
     ex = Meta.parse(t)
@@ -40,11 +47,23 @@ function feval(e, env::AbstractDict{Symbol,<:Any})
         error("SIF expression references undefined symbol $e")
     elseif e isa Number
         return e isa Integer ? e : Float64(e)
+    elseif e isa Bool
+        return e
     elseif e isa Expr
         if e.head === :call
             op = e.args[1]
             args = Any[feval(a, env) for a in e.args[2:end]]
             return fapply(op, args)
+        elseif e.head === :comparison
+            v = true
+            for k in 1:2:length(e.args)-2
+                v = v && fapply(e.args[k+1], Any[feval(e.args[k], env), feval(e.args[k+2], env)])
+            end
+            return v
+        elseif e.head === :&& 
+            return feval(e.args[1], env) && feval(e.args[2], env)
+        elseif e.head === :||
+            return feval(e.args[1], env) || feval(e.args[2], env)
         else
             error("unsupported expression head $(e.head) in SIF expression")
         end
@@ -69,7 +88,40 @@ function fapply(op::Symbol, args)
         end
         return args[1]^p
     end
+    if op === :(<=) || op === :(<) || op === :(>=) || op === :(>) ||
+       op === :(==) || op === :(!=)
+        return getfield(Base, op)(args[1], args[2])
+    elseif op === :!
+        return !args[1]
+    end
     f = get(JLFUN, Symbol(uppercase(String(op))), nothing)
     f === nothing && error("unsupported function $op in SIF expression")
     return f(args...)
+end
+
+"A conditional assignment card in INDIVIDUALS: `target = ast` when the logical
+temporary `cond` is `sense` (I-card: sense=true, E-card: sense=false)."
+struct CondAssign
+    cond::Symbol
+    sense::Bool
+    ast::Any
+end
+
+"Collect free symbols of a parsed expression (call heads and comparison
+operators excluded)."
+function freesyms(e, acc = Set{Symbol}())
+    if e isa Symbol
+        (e === :true || e === :false) || push!(acc, e)
+    elseif e isa Expr
+        if e.head === :call
+            for a in e.args[2:end]; freesyms(a, acc); end
+        elseif e.head === :comparison
+            for k in 1:2:length(e.args); freesyms(e.args[k], acc); end
+        else
+            for a in e.args
+                (a isa Symbol || a isa Expr) && freesyms(a, acc)
+            end
+        end
+    end
+    return acc
 end

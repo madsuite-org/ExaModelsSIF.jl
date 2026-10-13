@@ -17,8 +17,8 @@ when the implementation or the ExaModels dependency changes.
 Verification harness: test/pilot.jl — compares nvar/ncon, x0, lvar/uvar,
 lcon/ucon, obj, grad, cons, Jacobian, Lagrangian Hessian against CUTEst.jl
 (Fortran SIFDecode reference) at x0 and a perturbed point, tol 1e-6.
-Population: the 22 pilot problems + BROWNAL, all PASS on this branch
-(2026-10-12, commit of record in git log).
+Population: the 30 PILOT problems in test/pilot.jl (22 original + 8 second
+wave), all PASS (2026-10-12, commit of record in git log).
 
 | Feature | Exercised by (within the verified population) |
 |---|---|
@@ -37,7 +37,14 @@ Population: the 22 pilot problems + BROWNAL, all PASS on this branch
 | QUADRATIC section, diagonal halved (:half convention) | DEGDIAG |
 | Fortran F-line translation (**, D-exponents, intrinsics, temporaries, GLOBALS) | all nonlinear pilots, ALSOTAME (A-lines) |
 | Wide nontrivial groups via buffered subexpression chunks (CHUNK=16) | BROWNAL (199-200 lin terms/group) |
-| Constraint-order convention: natural SIF order; CUTEst default order is linear-first + equations-first (harness permutes) | HS14 |
+| Element-sum chunking for element-wide nontrivial groups (ELEM_BUDGET=40) | exercised in sweep (MSS3-class) |
+| Variable 'SCALE' factors: parsed and IGNORED (LANCELOT hints; CUTEst evaluates unscaled) | MEYER3 |
+| Parameter-only conditional temporaries (L temps, A logical, I/E cards) | DECONVC |
+| Z variable cards; INTEGER/CONTINUOUS markers ignored (continuous relax.) | CATENA, AVGASB |
+| First-named-set rule (CONSTANTS/RANGES/BOUNDS/START POINT) | HS91-class files, DECONVC |
+| IR code; RA/RS/RM/RD and IA/IS/IM/ID with parameter operand in field 5 | HS111LNP, DRUGDIS, LUKVLE14 |
+| Inline $-comments; params named like (N-2)/3 | GRIDNETG, LUKVLE14 |
+| Constraint & variable order: CUTEst reorders BOTH (linear/equation-first rows, nonlinear-first variables). Harness permutes by exact SIFDecode names (varnames/cnames) — never guess the order | HS14, DECONVC, GPP |
 
 *GPP: decode verified (loop semantics); not yet CUTEst-validated.
 
