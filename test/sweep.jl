@@ -5,9 +5,12 @@
 # problems so the driver can restart Julia (bounds accumulated compilation
 # memory on this shared host).
 using ExaModelsSIF
-const DIR = expanduser("~/git/pkg/cutest-sif")
-const OUT = expanduser("~/git/pkg/ExaModelsSIF.jl/sweep_results.tsv")
-const CUR = expanduser("~/git/pkg/ExaModelsSIF.jl/current.txt")
+const DIR = get(ENV, "SIF_DIR", "/home/sushin/.julia/artifacts/1fa01d4c3b344b8cd32b8ef78c0abeac9bb9cce2")  # canonical: CUTEst_jll artifact
+const SHARD = parse(Int, get(ENV, "SWEEP_SHARD", "0"))
+const NSHARDS = parse(Int, get(ENV, "SWEEP_NSHARDS", "1"))
+const SUF = NSHARDS == 1 ? "" : ".$SHARD"
+const OUT = expanduser("~/git/pkg/ExaModelsSIF.jl/sweep_results$(SUF).tsv")
+const CUR = expanduser("~/git/pkg/ExaModelsSIF.jl/current$(SUF).txt")
 const CHUNK = 150
 
 done = Set{String}()
@@ -27,7 +30,13 @@ end
 function run_sweep()
     nproc = 0
     open(OUT, "a") do io
-        for f in sort(filter(f -> endswith(f, ".SIF"), readdir(DIR)))
+        allf = sort(filter(f -> endswith(f, ".SIF"), readdir(DIR)))
+    if haskey(ENV, "SWEEP_ONLY")
+        want = Set(strip.(readlines(ENV["SWEEP_ONLY"])))
+        allf = [f for f in allf if f[1:end-4] in want]
+    end
+        for (fi, f) in enumerate(allf)
+            (fi - 1) % NSHARDS == SHARD || continue
             name = f[1:end-4]
             name in done && continue
             write(CUR, name)

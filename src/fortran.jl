@@ -33,6 +33,8 @@ const JLFUN = Dict{Symbol,Function}(
     :MAX => max, :MIN => min, :MOD => mod,
     :ARCTAN => atan, :ARCSIN => asin, :ARCCOS => acos,
     :DBLE => identity, :FLOAT => identity, :REAL => identity,
+    :DABS => abs, :DSQRT => sqrt, :DLOG => log, :DEXP => exp,
+    :DSIN => sin, :DCOS => cos, :DMAX1 => max, :DMIN1 => min,
     :SIGN => (a, b) -> (a isa Number && b isa Number) ?
         abs(a) * (b < 0 ? -1.0 : 1.0) : abs(a) * (2.0 * step_ge(b) - 1.0),
     :INT => x -> trunc(x), :AINT => x -> trunc(x), :NINT => x -> round(x),
