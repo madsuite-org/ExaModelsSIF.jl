@@ -2,3 +2,4 @@ sweep_results*.tsv
 current*.txt
 sweep_progress*.log
 driver.out
+failed_names.txt
