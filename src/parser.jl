@@ -509,7 +509,16 @@ function handle_bounds!(st::State, cd::Card)
         if code in ("LO", "XL", "ZL")
             for v in vs; P.lvar[v] = val; end
         elseif code in ("UP", "XU", "ZU")
-            for v in vs; P.uvar[v] = val; end
+            for v in vs
+                P.uvar[v] = val
+                # MPS rule as SIFDecode applies it: a non-positive upper bound
+                # frees a lower bound currently equal to 0 -- by VALUE, even if
+                # an explicit "LO ... 0.0" set it (measured on CLEUVEN7, where
+                # LO 0.0 + UP 0.0 yields [-Inf, 0]); HIER133* class likewise.
+                if val <= 0.0 && P.lvar[v] == 0.0
+                    P.lvar[v] = -Inf
+                end
+            end
         else
             for v in vs; P.lvar[v] = val; P.uvar[v] = val; end
         end
