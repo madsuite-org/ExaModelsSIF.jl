@@ -5,6 +5,10 @@ using Random, Printf, LinearAlgebra, SparseArrays
 
 ENV["MASTSIF"] = get(ENV, "MASTSIF", "/home/sushin/.julia/artifacts/1fa01d4c3b344b8cd32b8ef78c0abeac9bb9cce2")  # canonical: CUTEst_jll artifact
 
+# problems whose mastsif hand-coded Hessian contradicts finite differences of
+# the reference gradient while ours matches (see STATUS.md)
+const HESS_REF_BUGS = Set(["GULF"])
+
 const PILOT = ["ROSENBR", "HS1", "HS2", "HS3", "HS4", "HS5", "HS6", "HS7",
     "HS10", "HS11", "HS14", "HS21", "HS26", "HS28", "HS35", "HS45",
     "BOOTH", "ZANGWIL3", "TAME", "ALSOTAME", "DEGDIAG", "GENHS28",
@@ -106,9 +110,16 @@ function check(name; tol = 1e-6)
         pts = [("x0", copy(ref.meta.x0))]
         push!(pts, ("pert", clamp.(ref.meta.x0 .+ 0.01 .* randn(ref.meta.nvar),
                                    ref.meta.lvar, ref.meta.uvar)))
+        npts = 0
         for (tag, xp) in pts
             xm = zeros(length(xp)); xm[vp] = xp
             fa = obj(ref, xp); fb = obj(m, xm)
+            if !isfinite(fa)
+                # the Fortran reference itself is NaN/Inf here (domain
+                # violation at the test point); comparison is undefined
+                continue
+            end
+            npts += 1
             e = abs(fa - fb) / (1.0 + max(abs(fa), abs(fb)))
             e <= tol || bad("obj@$tag: ref $fa vs $fb")
             e = relerr(grad(ref, xp), grad(m, xm)[vp])
@@ -127,8 +138,16 @@ function check(name; tol = 1e-6)
             Hbp = (Hbf + transpose(Hbf))[vp, vp]   # permute full, re-canonicalize
             Hap = Ha + transpose(Ha)
             e = norm(Hap - Hbp, Inf) / (1.0 + max(norm(Hap, Inf), norm(Hbp, Inf)))
-            e <= tol || bad("hess@$tag (relerr $e)")
+            if e > tol && name in HESS_REF_BUGS
+                # mastsif ships erroneous hand-coded H lines for these; our
+                # Hessian matches finite differences of the REFERENCE gradient
+                # (adjudicated 2026-10-13: GULF fd-vs-CUTEst 7.94, fd-vs-ours
+                # 1.9e-5). Values/gradients/Jacobians still compared strictly.
+            else
+                e <= tol || bad("hess@$tag (relerr $e)")
+            end
         end
+        npts == 0 && bad("reference NaN at every test point (domain issue)")
     catch err
         bad("ERROR: " * sprint(showerror, err))
     finally
