@@ -1,3 +1,5 @@
+import SpecialFunctions: erfcx
+
 # fortran.jl — translate the restricted Fortran expression language used in the
 # ELEMENTS/GROUPS INDIVIDUALS sections of a SIF file into Julia ASTs, and
 # evaluate those ASTs at ExaModels trace time over symbolic nodes.
@@ -38,7 +40,16 @@ const JLFUN = Dict{Symbol,Function}(
     :SIGN => (a, b) -> (a isa Number && b isa Number) ?
         abs(a) * (b < 0 ? -1.0 : 1.0) : abs(a) * (2.0 * step_ge(b) - 1.0),
     :INT => x -> trunc(x), :AINT => x -> trunc(x), :NINT => x -> round(x),
+    :HYPTAN => tanh, :HYPSIN => sinh, :HYPCOS => cosh,
+    :ERFC_SCALED => x -> erfcx(x),
 )
+
+# erfcx (scaled complementary error function), used via ERFC_SCALED by the
+# CERI651 class. Closed-form derivatives, registered with ExaModels.
+const _TWO_OVER_SQRTPI = 1.1283791670955126
+_derfcx(x) = 2x * erfcx(x) - _TWO_OVER_SQRTPI
+_dderfcx(x) = (2 + 4x^2) * erfcx(x) - 2x * _TWO_OVER_SQRTPI
+ExaModels.@register_univariate(erfcx, _derfcx, _dderfcx)
 
 "Exact step function on a model expression: 1 where `t REL 0` holds, else 0,
 ties handled exactly (sign(0) = 0), derivative 0 (ExaModels sign registration),

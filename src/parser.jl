@@ -837,8 +837,7 @@ function sif_decode(path::AbstractString; loopfinal::Symbol = :last)
             union!(syms, callheads(entast(ent)))
         end
         for fn in fdecls
-            fn in syms && error("type $tname uses external Fortran function " *
-                                "$fn (hand-coded Fortran; unsupported)")
+            fn in syms && throw(ExternalFortranError(String(tname), fn))
         end
     end
 
