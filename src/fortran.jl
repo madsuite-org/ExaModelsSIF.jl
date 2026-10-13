@@ -129,6 +129,13 @@ function fapply(op::Symbol, args)
         if p isa Number && isinteger(p)
             return args[1]^Int(p)
         end
+        # Fortran X**Y with real Y is only defined for X > 0; Julia ^ THROWS
+        # for negative base. Rewrite through exp/log(abs) so an inactive
+        # conditional branch with a negative base yields a finite junk value
+        # (annihilated by the blend) instead of a DomainError. Exact for X > 0.
+        if !(args[1] isa Number)
+            return exp(p * log(abs(args[1])))
+        end
         return args[1]^p
     end
     if op === :(<=) || op === :(<) || op === :(>=) || op === :(>) ||

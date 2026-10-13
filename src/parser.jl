@@ -93,16 +93,22 @@ function card(ln::AbstractString)
     # "C(I,J)   0" + ".25" -> name "C(I,J)", value "0.25").
     function pair(a, b)
         a > L && return ("", "")
-        nf = g(a, a + 9)
+        nfraw = ln[a:min(a + 9, L)]
         vf = a + 10 <= L ? String(strip(ln[a+10:min(b, L)])) : ""
-        mm = match(r"^(.*\S)\s+(\S+)$", nf)
-        if mm !== nothing
-            merged = replace(mm[2] * vf, " " => "")
-            if tryparse(Float64, replace(merged, r"[dD](?=[0-9+-])" => "e")) !== nothing
-                return (String(mm[1]), merged)
+        # Merge a value bleeding across the subfield boundary (TORSION* class)
+        # ONLY when the boundary itself is contiguous non-blank text; names may
+        # legitimately contain interior blanks (HELSBY "N      1").
+        if length(nfraw) == 10 && !isspace(nfraw[end]) &&
+           a + 10 <= L && !isspace(ln[a+10])
+            mm = match(r"^(.*\S)\s+(\S+)$", nfraw)
+            if mm !== nothing
+                merged = replace(mm[2] * vf, " " => "")
+                if tryparse(Float64, replace(merged, r"[dD](?=[0-9+-])" => "e")) !== nothing
+                    return (String(mm[1]), merged)
+                end
             end
         end
-        return (nf, vf)
+        return (String(strip(nfraw)), vf)
     end
     f3, f4 = pair(15, 36)
     f5, f6 = pair(40, 61)
@@ -190,7 +196,17 @@ function expandname(st::State, name::AbstractString)
     occursin('(', name) || return String(name)
     return replace(name, r"\(([^()]*)\)" => m -> begin
         inner = m[2:end-1]
-        join([string(resolveint(st, strip(tok))) for tok in split(inner, ',')], ",")
+        vals = String[]
+        for tok in split(inner, ',')
+            v = try
+                resolveint(st, strip(tok))
+            catch
+                nothing
+            end
+            v === nothing && return m   # not an index list: part of the name
+            push!(vals, string(v))
+        end
+        join(vals, ",")
     end)
 end
 
@@ -216,7 +232,7 @@ function handle_iparam!(st::State, cd::Card)
         c = c == "IA" ? "I+" : c == "IS" ? "I-" : c == "IM" ? "I*" : "I/"
     end
     if c == "IE"
-        st.ip[dest] = resolveint(st, cd.f4)
+        st.ip[dest] = resolveint(st, isempty(cd.f4) ? cd.f3 : cd.f4)
     elseif c == "IA"
         st.ip[dest] = st.ip[expandname(st, cd.f3)] + resolveint(st, cd.f4)
     elseif c == "IS"
@@ -250,7 +266,7 @@ function handle_rparam!(st::State, cd::Card)
         c = c == "RA" ? "R+" : c == "RS" ? "R-" : c == "RM" ? "R*" : "R/"
     end
     if c == "RE"
-        st.rp[dest] = parsenum(cd.f4)
+        st.rp[dest] = parsenum(isempty(cd.f4) ? cd.f3 : cd.f4)
     elseif c == "RA"
         st.rp[dest] = st.rp[expandname(st, cd.f3)] + parsenum(cd.f4)
     elseif c == "RS"
@@ -402,9 +418,8 @@ function handle_variables!(st::State, cd::Card)
     for (gn, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
         isempty(gn) && continue
         unquote(gn) in ("INTEGER", "CONTINUOUS") && continue
-        gn == "INTEGER" && continue
         g = getgroup!(st, expandname(st, gn), nothing)
-        push!(g.lin, v => parsenum(val))
+        push!(g.lin, v => isempty(val) ? 1.0 : parsenum(val))
     end
 end
 
@@ -720,7 +735,7 @@ function parse_funpart(lines, isgroup::Bool)
     pend_code = ""           # for continuation lines
     pend_name = Symbol("")
     pend_expr = ""
-    pend2 = Symbol("")
+    pend2 = Symbol("")       # condition temp for I/E cards
 
     function flushpend!()
         isempty(pend_code) && return
@@ -729,6 +744,9 @@ function parse_funpart(lines, isgroup::Bool)
                   pend_name => fparse(pend_expr))
         elseif pend_code == "F"
             curf = fparse(pend_expr)
+        elseif pend_code == "I" || pend_code == "E"
+            push!(curtemps, pend_name =>
+                CondAssign(pend2, pend_code == "I", fparse(pend_expr)))
         end
         pend_code = ""
     end
@@ -773,8 +791,12 @@ function parse_funpart(lines, isgroup::Bool)
             elseif code == "G" || code == "H"
                 pend_code = "G"; pend_expr = cd.expr   # parsed then discarded
             elseif code == "I" || code == "E"
-                push!(curtemps, Symbol(cd.f3) =>
-                    CondAssign(Symbol(cd.f2), code == "I", fparse(cd.expr)))
+                pend_code = code
+                pend2 = Symbol(cd.f2)
+                pend_name = Symbol(cd.f3)
+                # expression begins after the two name fields (col 25+); strip
+                # the condition/target tokens that the expr span includes
+                pend_expr = cd.expr
             elseif code == "R"
                 rows = get!(currows, Symbol(cd.f2), Pair{Symbol,Float64}[])
                 for (vn, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
