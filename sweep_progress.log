@@ -1,0 +1,1355 @@
+
+[2665926] signal 15: Terminated
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:7
+unknown function (ip: 0x7a787b098e4f) at /lib/x86_64-linux-gnu/libc.so.6
+pthread_cond_wait at /lib/x86_64-linux-gnu/libc.so.6 (unknown line)
+uv_cond_wait at /workspace/srcdir/libuv/src/unix/thread.c:822
+ijl_task_get_next at /cache/build/builder-amdci4-8/julialang/julia-ci/src/scheduler.c:599
+wait at ./task.jl:1297
+#wait#392 at ./condition.jl:141
+wait at ./condition.jl:136 [inlined]
+_trywait at ./asyncevent.jl:186
+profile_printing_listener at ./Base.jl:335
+#start_profile_listener##0 at ./Base.jl:355
+jfptr_YY.start_profile_listenerYY.YY.0_16783.1 at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/lib/julia/sys.so (unknown line)
+jl_apply at /cache/build/builder-amdci4-8/julialang/julia-ci/src/julia.h:2318 [inlined]
+start_task at /cache/build/builder-amdci4-8/julialang/julia-ci/src/task.c:1285
+unknown function (ip: (nil)) at (unknown file)
+_ZNK4llvm17RegisterClassInfo16computePSetLimitEj at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm17ScheduleDAGMILive15initRegPressureEv at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm17ScheduleDAGMILive8scheduleEv at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN12_GLOBAL__N_120MachineSchedulerBase15scheduleRegionsERN4llvm17ScheduleDAGInstrsEb at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN12_GLOBAL__N_116MachineScheduler20runOnMachineFunctionERN4llvm15MachineFunctionE at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm19MachineFunctionPass13runOnFunctionERNS_8FunctionE.part.0 at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm13FPPassManager13runOnFunctionERNS_8FunctionE at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm13FPPassManager11runOnModuleERNS_6ModuleE at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+warning: address range table at offset 0x3970 has a premature terminator entry at offset 0x42c0
+warning: address range table at offset 0x3970 has a premature terminator entry at offset 0x4320
+operator() at /cache/build/builder-amdci4-8/julialang/julia-ci/src/jitlayers.cpp:1627
+addModule at /cache/build/builder-amdci4-8/julialang/julia-ci/src/jitlayers.cpp:2130
+jl_compile_codeinst_now at /cache/build/builder-amdci4-8/julialang/julia-ci/src/jitlayers.cpp:681
+jl_compile_codeinst_impl at /cache/build/builder-amdci4-8/julialang/julia-ci/src/jitlayers.cpp:875
+jl_compile_method_internal at /cache/build/builder-amdci4-8/julialang/julia-ci/src/gf.c:3727
+_jl_invoke at /cache/build/builder-amdci4-8/julialang/julia-ci/src/gf.c:4189 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-8/julialang/julia-ci/src/gf.c:4398
+open at ./io.jl:426
+jl_apply at /cache/build/builder-amdci4-8/julialang/julia-ci/src/julia.h:2318 [inlined]
+do_call at /cache/build/builder-amdci4-8/julialang/julia-ci/src/interpreter.c:123
+eval_value at /cache/build/builder-amdci4-8/julialang/julia-ci/src/interpreter.c:243
+eval_stmt_value at /cache/build/builder-amdci4-8/julialang/julia-ci/src/interpreter.c:194 [inlined]
+eval_body at /cache/build/builder-amdci4-8/julialang/julia-ci/src/interpreter.c:679
+jl_interpret_toplevel_thunk at /cache/build/builder-amdci4-8/julialang/julia-ci/src/interpreter.c:884
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-8/julialang/julia-ci/src/toplevel.c:742
+jl_eval_toplevel_stmts at /cache/build/builder-amdci4-8/julialang/julia-ci/src/toplevel.c:585
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-8/julialang/julia-ci/src/toplevel.c:683
+ijl_toplevel_eval at /cache/build/builder-amdci4-8/julialang/julia-ci/src/toplevel.c:754
+ijl_toplevel_eval_in at /cache/build/builder-amdci4-8/julialang/julia-ci/src/toplevel.c:799
+eval at ./boot.jl:489
+include_string at ./loading.jl:3033
+_include at ./loading.jl:3093
+include at ./Base.jl:309
+exec_options at ./client.jl:344
+_start at ./client.jl:577
+jfptr__start_58396.1 at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/lib/julia/sys.so (unknown line)
+jl_apply at /cache/build/builder-amdci4-8/julialang/julia-ci/src/julia.h:2318 [inlined]
+true_main at /cache/build/builder-amdci4-8/julialang/julia-ci/src/jlapi.c:985
+jl_repl_entrypoint at /cache/build/builder-amdci4-8/julialang/julia-ci/src/jlapi.c:1152
+main at /cache/build/builder-amdci4-8/julialang/julia-ci/cli/loader_exe.c:58
+unknown function (ip: 0x7a787b02a1c9) at /lib/x86_64-linux-gnu/libc.so.6
+__libc_start_main at /lib/x86_64-linux-gnu/libc.so.6 (unknown line)
+unknown function (ip: 0x4010b8) at /workspace/srcdir/glibc-2.17/csu/../sysdeps/x86_64/start.S
+unknown function (ip: (nil)) at (unknown file)
+Allocations: 6875407 (Pool: 6875161; Big: 246); GC: 8
+processing 10FOLDTR
+processing 3PK
+processing A0ENDNDL
+processing A0ENINDL
+processing A0ENSNDL
+processing A0ESDNDL
+processing A0ESINDL
+processing A0ESSNDL
+processing A0NNDNDL
+processing A0NNDNIL
+processing A0NNDNSL
+processing A0NNSNSL
+processing A0NSDSDL
+processing A0NSDSDS
+processing A0NSDSIL
+processing A0NSDSSL
+processing A0NSSSSL
+processing A2ENDNDL
+processing A2ENINDL
+processing A2ENSNDL
+processing A2ESDNDL
+processing A2ESINDL
+processing A2ESSNDL
+processing A2NNDNDL
+processing A2NNDNIL
+processing A2NNDNSL
+processing A2NNSNSL
+processing A2NSDSDL
+processing A2NSDSIL
+processing A2NSDSSL
+processing A2NSSSSL
+processing A4X12
+processing A5ENDNDL
+processing A5ENINDL
+processing A5ENSNDL
+processing A5ESDNDL
+processing A5ESINDL
+processing A5ESSNDL
+processing A5NNDNDL
+processing A5NNDNIL
+processing A5NNDNSL
+processing A5NNSNSL
+processing A5NSDSDL
+processing A5NSDSDM
+processing A5NSDSIL
+processing A5NSDSSL
+processing A5NSSNSM
+processing A5NSSSSL
+processing ACOPP118
+processing ACOPP14
+processing ACOPP30
+processing ACOPP300
+processing ACOPP57
+processing ACOPR118
+processing ACOPR14
+processing ACOPR30
+processing ACOPR300
+processing ACOPR57
+processing AGG
+processing AIRCRFTA
+processing AIRCRFTB
+processing AIRPORT
+processing AKIVA
+processing ALJAZZAF
+processing ALLINIT
+processing ALLINITA
+processing ALLINITC
+processing ALLINITU
+processing ALLINQP
+processing ALSOTAME
+processing ANTWERP
+processing ARGAUSS
+processing ARGLALE
+processing ARGLBLE
+processing ARGLCLE
+processing ARGLINA
+processing ARGLINB
+processing ARGLINC
+processing ARGTRIG
+processing ARTIF
+processing ARWHDNE
+processing ARWHEAD
+processing AUG2D
+processing AUG2DC
+processing AUG2DCQP
+processing AUG2DQP
+processing AUG3D
+processing AUG3DC
+processing AUG3DCQP
+processing AUG3DQP
+processing AVGASA
+processing AVGASB
+processing AVION2
+processing BARD
+processing BATCH
+processing BDEXP
+processing BDQRTIC
+processing BDRY2
+processing BDVALUE
+processing BDVALUES
+processing BEALE
+processing BIGBANK
+processing BIGGS3
+processing BIGGS5
+processing BIGGS6
+processing BIGGSB1
+processing BIGGSC4
+processing BLEACHNG
+processing BLOCKQP1
+processing BLOCKQP2
+processing BLOCKQP3
+processing BLOCKQP4
+processing BLOCKQP5
+processing BLOWEYA
+processing BLOWEYB
+processing BLOWEYC
+processing BOOTH
+processing BOX
+processing BOX2
+processing BOX3
+processing BOXPOWER
+processing BQP1VAR
+processing BQPGABIM
+processing BQPGASIM
+processing BQPGAUSS
+processing BRAINPC0
+processing BRAINPC1
+processing BRAINPC2
+processing BRAINPC3
+processing BRAINPC4
+processing BRAINPC5
+processing BRAINPC6
+processing BRAINPC7
+processing BRAINPC8
+processing BRAINPC9
+processing BRATU1D
+processing BRATU2D
+processing BRATU2DT
+processing BRATU3D
+processing BRIDGEND
+processing BRITGAS
+processing BRKMCC
+processing BROWNAL
+processing BROWNALE
+processing BROWNBS
+processing BROWNDEN
+processing BROYDN3D
+processing BROYDN7D
+processing BROYDNBD
+processing BRYBND
+processing BT1
+processing BT10
+processing BT11
+processing BT12
+processing BT13
+processing BT2
+processing BT3
+processing BT4
+processing BT5
+processing BT6
+processing BT7
+processing BT8
+processing BT9
+processing BTS4
+processing BURKEHAN
+processing BYRDSPHR
+processing C-RELOAD
+processing CAMEL6
+processing CAMSHAPE
+processing CANTILVR
+processing CAR2
+processing CATENA
+processing CATENARY
+processing CATMIX
+processing CB2
+processing CB3
+processing CBRATU2D
+processing CBRATU3D
+processing CBS
+processing CHACONN1
+processing CHACONN2
+processing CHAIN
+processing CHAINWOO
+processing CHANDHEQ
+processing CHANDHEU
+processing CHANNEL
+processing CHARDIS0
+processing CHARDIS1
+processing CHEBYQAD
+processing CHEMRCTA
+processing CHEMRCTB
+processing CHENHARK
+processing CHNROSNB
+processing CHNRSBNE
+processing CHNRSNBM
+processing CLIFF
+processing CLNLBEAM
+processing CLPLATEA
+processing CLPLATEB
+processing CLPLATEC
+processing CLUSTER
+processing CONCON
+processing CONGIGMZ
+processing CONT5-QP
+processing CONT6-QQ
+processing COOLHANS
+processing CORE1
+processing CORE2
+processing CORKSCRW
+processing COSHFUN
+processing COSINE
+processing CRAGGLVY
+processing CRESC100
+processing CRESC132
+processing CRESC4
+processing CRESC50
+processing CSFI1
+processing CSFI2
+processing CUBE
+processing CUBENE
+processing CURLY10
+processing CURLY20
+processing CURLY30
+processing CVXBQP1
+processing CVXQP1
+processing CVXQP2
+processing CVXQP3
+processing CYCLIC3
+processing DALE
+processing DALLASL
+processing DALLASM
+processing DALLASS
+processing DECONVB
+processing DECONVC
+processing DECONVNE
+processing DECONVU
+processing DEGDIAG
+processing DEGENLPA
+processing DEGENLPB
+processing DEGENQP
+processing DEGENQPC
+processing DEGTRID
+processing DEGTRID2
+processing DEGTRIDL
+processing DEMBO7
+processing DEMYMALO
+processing DENSCHNA
+processing DENSCHNB
+processing DENSCHNC
+processing DENSCHND
+processing DENSCHNE
+processing DENSCHNF
+processing DIPIGRI
+processing DISC2
+processing DISCS
+processing DITTERT
+processing DIXCHLNG
+processing DIXCHLNV
+processing DIXMAANA
+processing DIXMAANB
+processing DIXMAANC
+processing DIXMAAND
+processing DIXMAANE
+processing DIXMAANF
+processing DIXMAANG
+processing DIXMAANH
+processing DIXMAANI
+processing DIXMAANJ
+processing DIXMAANK
+processing DIXMAANL
+processing DIXMAANM
+processing DIXMAANN
+processing DIXMAANO
+processing DIXMAANP
+processing DIXON3DQ
+processing DJTL
+processing DNIEPER
+processing DQDRTIC
+processing DQRTIC
+processing DRCAV1LQ
+processing DRCAV2LQ
+processing DRCAV3LQ
+processing DRCAVTY1
+processing DRCAVTY2
+processing DRCAVTY3
+processing DRUGDIS
+processing DRUGDISE
+processing DTOC1L
+processing DTOC1NA
+processing DTOC1NB
+processing DTOC1NC
+processing DTOC1ND
+processing DTOC2
+processing DTOC3
+processing DTOC4
+processing DTOC5
+processing DTOC6
+processing DUAL1
+processing DUAL2
+processing DUAL3
+processing DUAL4
+processing DUALC1
+processing DUALC2
+processing DUALC5
+processing DUALC8
+processing EDENSCH
+processing EG1
+processing EG2
+processing EG3
+processing EIGENA
+processing EIGENA2
+processing EIGENACO
+processing EIGENALS
+processing EIGENAU
+processing EIGENB
+processing EIGENB2
+processing EIGENBCO
+processing EIGENBLS
+processing EIGENC
+processing EIGENC2
+processing EIGENCCO
+processing EIGENCLS
+processing EIGMAXA
+processing EIGMAXB
+processing EIGMAXC
+processing EIGMINA
+processing EIGMINB
+processing EIGMINC
+processing ELATTAR
+processing ELEC
+processing ENGVAL1
+processing ENGVAL2
+processing EQC
+processing ERRINBAR
+processing ERRINROS
+processing ERRINRSM
+processing EXPFIT
+processing EXPFITA
+processing EXPFITB
+processing EXPFITC
+processing EXPLIN
+processing EXPLIN2
+processing EXPQUAD
+processing EXTRASIM
+processing EXTROSNB
+processing FCCU
+processing FEEDLOC
+processing FERRISDC
+processing FIVE20B
+processing FIVE20C
+processing FLETBV3M
+processing FLETCBV2
+processing FLETCBV3
+processing FLETCHBV
+processing FLETCHCR
+processing FLETCHER
+processing FLOSP2HH
+processing FLOSP2HL
+processing FLOSP2HM
+processing FLOSP2TH
+processing FLOSP2TL
+processing FLOSP2TM
+processing FLT
+processing FMINSRF2
+processing FMINSURF
+processing FREUROTH
+processing GASOIL
+processing GAUSSELM
+processing GENHS28
+processing GENHUMPS
+processing GENROSE
+processing GIGOMEZ1
+processing GIGOMEZ2
+processing GIGOMEZ3
+processing GILBERT
+processing GLIDER
+processing GMNCASE1
+processing GMNCASE2
+processing GMNCASE3
+processing GMNCASE4
+processing GOFFIN
+processing GOTTFR
+processing GOULDQP1
+processing GOULDQP2
+processing GOULDQP3
+processing GPP
+processing GRIDGENA
+
+[2666082] signal 15: Terminated
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:7
+unknown function (ip: 0x7a9cd7098e4f) at /lib/x86_64-linux-gnu/libc.so.6
+pthread_cond_wait at /lib/x86_64-linux-gnu/libc.so.6 (unknown line)
+uv_cond_wait at /workspace/srcdir/libuv/src/unix/thread.c:822
+ijl_task_get_next at /cache/build/builder-amdci4-8/julialang/julia-ci/src/scheduler.c:599
+wait at ./task.jl:1297
+#wait#392 at ./condition.jl:141
+wait at ./condition.jl:136 [inlined]
+_trywait at ./asyncevent.jl:186
+profile_printing_listener at ./Base.jl:335
+#start_profile_listener##0 at ./Base.jl:355
+jfptr_YY.start_profile_listenerYY.YY.0_16783.1 at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/lib/julia/sys.so (unknown line)
+jl_apply at /cache/build/builder-amdci4-8/julialang/julia-ci/src/julia.h:2318 [inlined]
+start_task at /cache/build/builder-amdci4-8/julialang/julia-ci/src/task.c:1285
+unknown function (ip: (nil)) at (unknown file)
+== at ./strings/substring.jl:0 [inlined]
+isequal at ./operators.jl:178 [inlined]
+ht_keyindex at ./dict.jl:251
+haskey at ./dict.jl:550 [inlined]
+resolveint at /home/sushin/git/pkg/ExaModelsSIF.jl/src/parser.jl:155 [inlined]
+#expandname##0 at ./none (unknown line)
+iterate at ./generator.jl:48 [inlined]
+collect_to! at ./array.jl:886 [inlined]
+collect_to_with_first! at ./array.jl:864 [inlined]
+collect at ./array.jl:838
+expandname at /home/sushin/git/pkg/ExaModelsSIF.jl/src/parser.jl:166
+handle_eluses! at /home/sushin/git/pkg/ExaModelsSIF.jl/src/parser.jl:489
+handle_card! at /home/sushin/git/pkg/ExaModelsSIF.jl/src/parser.jl:307
+run_cards! at /home/sushin/git/pkg/ExaModelsSIF.jl/src/parser.jl:603
+run_cards! at /home/sushin/git/pkg/ExaModelsSIF.jl/src/parser.jl:594
+run_cards! at /home/sushin/git/pkg/ExaModelsSIF.jl/src/parser.jl:594
+#sif_decode#2 at /home/sushin/git/pkg/ExaModelsSIF.jl/src/parser.jl:701
+sif_decode at /home/sushin/git/pkg/ExaModelsSIF.jl/src/parser.jl:695 [inlined]
+#2 at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:15
+#open#324 at ./io.jl:429
+open at ./io.jl:426
+jl_apply at /cache/build/builder-amdci4-8/julialang/julia-ci/src/julia.h:2318 [inlined]
+do_call at /cache/build/builder-amdci4-8/julialang/julia-ci/src/interpreter.c:123
+eval_value at /cache/build/builder-amdci4-8/julialang/julia-ci/src/interpreter.c:243
+eval_stmt_value at /cache/build/builder-amdci4-8/julialang/julia-ci/src/interpreter.c:194 [inlined]
+eval_body at /cache/build/builder-amdci4-8/julialang/julia-ci/src/interpreter.c:679
+jl_interpret_toplevel_thunk at /cache/build/builder-amdci4-8/julialang/julia-ci/src/interpreter.c:884
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-8/julialang/julia-ci/src/toplevel.c:742
+jl_eval_toplevel_stmts at /cache/build/builder-amdci4-8/julialang/julia-ci/src/toplevel.c:585
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-8/julialang/julia-ci/src/toplevel.c:683
+ijl_toplevel_eval at /cache/build/builder-amdci4-8/julialang/julia-ci/src/toplevel.c:754
+ijl_toplevel_eval_in at /cache/build/builder-amdci4-8/julialang/julia-ci/src/toplevel.c:799
+eval at ./boot.jl:489
+include_string at ./loading.jl:3033
+_include at ./loading.jl:3093
+include at ./Base.jl:309
+exec_options at ./client.jl:344
+_start at ./client.jl:577
+jfptr__start_58396.1 at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/lib/julia/sys.so (unknown line)
+jl_apply at /cache/build/builder-amdci4-8/julialang/julia-ci/src/julia.h:2318 [inlined]
+true_main at /cache/build/builder-amdci4-8/julialang/julia-ci/src/jlapi.c:985
+jl_repl_entrypoint at /cache/build/builder-amdci4-8/julialang/julia-ci/src/jlapi.c:1152
+main at /cache/build/builder-amdci4-8/julialang/julia-ci/cli/loader_exe.c:58
+unknown function (ip: 0x7a9cd702a1c9) at /lib/x86_64-linux-gnu/libc.so.6
+__libc_start_main at /lib/x86_64-linux-gnu/libc.so.6 (unknown line)
+unknown function (ip: 0x4010b8) at /workspace/srcdir/glibc-2.17/csu/../sysdeps/x86_64/start.S
+unknown function (ip: (nil)) at (unknown file)
+Allocations: 619051439 (Pool: 619046133; Big: 5306); GC: 130
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 1 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 2 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 3 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 4 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 5 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 6 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 7 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 8 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 9 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 10 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 11 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 12 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 13 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 14 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 15 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 16 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 17 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 18 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 19 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 20 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 21 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 22 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 23 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 24 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 25 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 26 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 27 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 28 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 29 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 30 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 31 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 32 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 33 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 34 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 35 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 36 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 37 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 38 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 39 exited rc=1
+ERROR: LoadError: UndefVarError: `nproc` not defined in local scope
+Suggestion: check for an assignment to a local variable that shadows a global of the same name.
+Stacktrace:
+ [1] (::var"#6#7")(io::IOStream)
+   @ Main ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:59
+ [2] open(::var"#6#7", ::String, ::Vararg{String}; kwargs::@Kwargs{})
+   @ Base ./io.jl:429
+ [3] open(::Function, ::String, ::String)
+   @ Base ./io.jl:426
+ [4] top-level scope
+   @ ~/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+ [5] include(mod::Module, _path::String)
+   @ Base ./Base.jl:309
+ [6] exec_options(opts::Base.JLOptions)
+   @ Base ./client.jl:344
+ [7] _start()
+   @ Base ./client.jl:577
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:28
+driver: pass 40 exited rc=1
+driver: retry budget exhausted
+chunk done
+driver: pass 1 exited rc=42
+chunk done
+driver: pass 2 exited rc=42
+
+[2670764] signal 15: Terminated
+in expression starting at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:71
+unknown function (ip: 0x79eb55698e4f) at /lib/x86_64-linux-gnu/libc.so.6
+pthread_cond_wait at /lib/x86_64-linux-gnu/libc.so.6 (unknown line)
+uv_cond_wait at /workspace/srcdir/libuv/src/unix/thread.c:822
+ijl_task_get_next at /cache/build/builder-amdci4-8/julialang/julia-ci/src/scheduler.c:599
+wait at ./task.jl:1297
+#wait#392 at ./condition.jl:141
+wait at ./condition.jl:136 [inlined]
+_trywait at ./asyncevent.jl:186
+profile_printing_listener at ./Base.jl:335
+#start_profile_listener##0 at ./Base.jl:355
+jfptr_YY.start_profile_listenerYY.YY.0_16783.1 at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/lib/julia/sys.so (unknown line)
+jl_apply at /cache/build/builder-amdci4-8/julialang/julia-ci/src/julia.h:2318 [inlined]
+start_task at /cache/build/builder-amdci4-8/julialang/julia-ci/src/task.c:1285
+unknown function (ip: (nil)) at (unknown file)
+_ZN4llvm13LiveIntervals24checkRegMaskInterferenceERKNS_12LiveIntervalERNS_9BitVectorE at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm13LiveRegMatrix17checkInterferenceERKNS_12LiveIntervalENS_10MCRegisterE at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm8RAGreedy9tryAssignERKNS_12LiveIntervalERNS_15AllocationOrderERNS_15SmallVectorImplINS_8RegisterEEERKNS_8SmallSetIS7_Lj16ESt4lessIS7_EEE at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm8RAGreedy17selectOrSplitImplERKNS_12LiveIntervalERNS_15SmallVectorImplINS_8RegisterEEERNS_8SmallSetIS5_Lj16ESt4lessIS5_EEERNS_11SmallVectorISt4pairIPS2_NS_10MCRegisterEELj8EEEj at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm8RAGreedy13selectOrSplitERKNS_12LiveIntervalERNS_15SmallVectorImplINS_8RegisterEEE at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm12RegAllocBase16allocatePhysRegsEv at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm8RAGreedy20runOnMachineFunctionERNS_15MachineFunctionE at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm19MachineFunctionPass13runOnFunctionERNS_8FunctionE.part.0 at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm13FPPassManager13runOnFunctionERNS_8FunctionE at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm13FPPassManager11runOnModuleERNS_6ModuleE at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/bin/../lib/julia/libLLVM.so.20.1jl (unknown line)
+warning: address range table at offset 0x3970 has a premature terminator entry at offset 0x42c0
+warning: address range table at offset 0x3970 has a premature terminator entry at offset 0x4320
+operator() at /cache/build/builder-amdci4-8/julialang/julia-ci/src/jitlayers.cpp:1627
+addModule at /cache/build/builder-amdci4-8/julialang/julia-ci/src/jitlayers.cpp:2130
+jl_compile_codeinst_now at /cache/build/builder-amdci4-8/julialang/julia-ci/src/jitlayers.cpp:681
+jl_compile_codeinst_impl at /cache/build/builder-amdci4-8/julialang/julia-ci/src/jitlayers.cpp:875
+jl_compile_method_internal at /cache/build/builder-amdci4-8/julialang/julia-ci/src/gf.c:3727
+_jl_invoke at /cache/build/builder-amdci4-8/julialang/julia-ci/src/gf.c:4189 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-8/julialang/julia-ci/src/gf.c:4398
+SIMDFunction at /home/sushin/git/pkg/ExaModels.jl/src/simdfunction.jl:47 [inlined]
+#add_obj#501 at /home/sushin/git/pkg/ExaModels.jl/src/nlp.jl:1450
+unknown function (ip: 0x79eb38593b94) at (unknown file)
+add_obj at /home/sushin/git/pkg/ExaModels.jl/src/nlp.jl:1448 [inlined]
+#build_exa#6 at /home/sushin/git/pkg/ExaModelsSIF.jl/src/builder.jl:286
+build_exa at /home/sushin/git/pkg/ExaModelsSIF.jl/src/builder.jl:125 [inlined]
+#run_sweep##0 at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:48
+#open#324 at ./io.jl:429 [inlined]
+open at ./io.jl:426 [inlined]
+run_sweep at /home/sushin/git/pkg/ExaModelsSIF.jl/test/sweep.jl:29
+unknown function (ip: 0x79eb3851cc8f) at (unknown file)
+jl_apply at /cache/build/builder-amdci4-8/julialang/julia-ci/src/julia.h:2318 [inlined]
+do_call at /cache/build/builder-amdci4-8/julialang/julia-ci/src/interpreter.c:123
+eval_value at /cache/build/builder-amdci4-8/julialang/julia-ci/src/interpreter.c:243
+eval_stmt_value at /cache/build/builder-amdci4-8/julialang/julia-ci/src/interpreter.c:194 [inlined]
+eval_body at /cache/build/builder-amdci4-8/julialang/julia-ci/src/interpreter.c:679
+jl_interpret_toplevel_thunk at /cache/build/builder-amdci4-8/julialang/julia-ci/src/interpreter.c:884
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-8/julialang/julia-ci/src/toplevel.c:742
+jl_eval_toplevel_stmts at /cache/build/builder-amdci4-8/julialang/julia-ci/src/toplevel.c:585
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-8/julialang/julia-ci/src/toplevel.c:683
+ijl_toplevel_eval at /cache/build/builder-amdci4-8/julialang/julia-ci/src/toplevel.c:754
+ijl_toplevel_eval_in at /cache/build/builder-amdci4-8/julialang/julia-ci/src/toplevel.c:799
+eval at ./boot.jl:489
+include_string at ./loading.jl:3033
+_include at ./loading.jl:3093
+include at ./Base.jl:309
+exec_options at ./client.jl:344
+_start at ./client.jl:577
+jfptr__start_58396.1 at /home/sushin/.julia/juliaup/julia-1.13.1+0.x64.linux.gnu/lib/julia/sys.so (unknown line)
+jl_apply at /cache/build/builder-amdci4-8/julialang/julia-ci/src/julia.h:2318 [inlined]
+true_main at /cache/build/builder-amdci4-8/julialang/julia-ci/src/jlapi.c:985
+jl_repl_entrypoint at /cache/build/builder-amdci4-8/julialang/julia-ci/src/jlapi.c:1152
+main at /cache/build/builder-amdci4-8/julialang/julia-ci/cli/loader_exe.c:58
+unknown function (ip: 0x79eb5562a1c9) at /lib/x86_64-linux-gnu/libc.so.6
+__libc_start_main at /lib/x86_64-linux-gnu/libc.so.6 (unknown line)
+unknown function (ip: 0x4010b8) at /workspace/srcdir/glibc-2.17/csu/../sysdeps/x86_64/start.S
+unknown function (ip: (nil)) at (unknown file)
+Allocations: 114574218 (Pool: 114570184; Big: 4034); GC: 35

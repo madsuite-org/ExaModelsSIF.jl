@@ -1,0 +1,65 @@
+# ExaModelsSIF — implemented & verified
+
+Purpose of this file (requested by Sungho, 2026-10-12): record what is already
+implemented and HOW it was verified, so verified behavior is not re-checked.
+Curate on every change: entries here state the CURRENT truth; re-verify only
+when the implementation or the ExaModels dependency changes.
+
+## Dependency
+
+- ExaModels branch `compile-time-prototypes` (madsuite-org/ExaModels.jl),
+  worktree ~/git/worktrees/ExaModels-ctp, commit `fe407fc0968ac52762965f57a1f10767ad9da5d9`.
+  Provides `add_expr(...; buffered = true)` (cached subexpressions) used for
+  wide-group lowering. Re-pin + re-run pilot when this moves.
+
+## Verified (do not re-check unless the code or dependency changes)
+
+Verification harness: test/pilot.jl — compares nvar/ncon, x0, lvar/uvar,
+lcon/ucon, obj, grad, cons, Jacobian, Lagrangian Hessian against CUTEst.jl
+(Fortran SIFDecode reference) at x0 and a perturbed point, tol 1e-6.
+Population: the 22 pilot problems + BROWNAL, all PASS on this branch
+(2026-10-12, commit of record in git log).
+
+| Feature | Exercised by (within the verified population) |
+|---|---|
+| Fixed-field card parsing, section dispatch | all 23 |
+| DO/OD/ND loops (incl. ND-closes-all, OD-closes-one) | DEGDIAG, GENHS28, HS45, GPP* |
+| Integer/real parameter arithmetic (IE/IA/RI/RD/RE/RA/R=/R- etc.) | DEGDIAG, HS45, GENHS28 |
+| Array names + inline index substitution | DEGDIAG, GENHS28, GPP* |
+| Default bounds [0, inf), FR/MI/PL/UP/LO/FX + X/Z variants | HS5, HS21, ALSOTAME, DEGDIAG (ZL) |
+| START POINT incl. 'DEFAULT' | HS35, HS45, GENHS28 |
+| Linear groups, CONSTANTS (folded into constraint value), RANGES conv. | TAME, BOOTH, ZANGWIL3, HS35 |
+| Group SCALE divides the group value (GF(alpha)/s) | ROSENBR |
+| Nontrivial group types on objective and constraints | ROSENBR, TAME, ALSOTAME, HS1/HS2 |
+| Elements: types, multiple per group, weights, ZE weight-from-param | HS35, HS14, HS45 |
+| Element parameters (EP/P cards) | HS11 |
+| Internal variables (IV + R range rows) | HS26, HS28, GENHS28 |
+| QUADRATIC section, diagonal halved (:half convention) | DEGDIAG |
+| Fortran F-line translation (**, D-exponents, intrinsics, temporaries, GLOBALS) | all nonlinear pilots, ALSOTAME (A-lines) |
+| Wide nontrivial groups via buffered subexpression chunks (CHUNK=16) | BROWNAL (199-200 lin terms/group) |
+| Constraint-order convention: natural SIF order; CUTEst default order is linear-first + equations-first (harness permutes) | HS14 |
+
+*GPP: decode verified (loop semantics); not yet CUTEst-validated.
+
+Calibrated conventions (validated by the population above, do not re-derive):
+- Group constant b: constraint value includes -b; bounds built around 0.
+- DO-loop variable keeps its LAST value after the loop (loopfinal=:last).
+- CUTEst.jl non-default efirst/lfirst flags crash (xlrQh); never use them.
+
+Microbenchmark (this host, 002): single traced kernel compile time vs linear
+width L: 16→3.8s, 32→17.7s, 48→53s (superquadratic). Buffered chunks (C=16):
+L=96→5.8s, L=200→16s, L=400→59s; obj/grad exact, Hessian to fd-noise (1e-8).
+
+## Known unsupported (sweep buckets, to be fixed; see sweep_results.tsv)
+
+- Conditional expressions in A-lines (.LE. etc.)
+- Integer-variable markers
+- MOD intrinsic on model expressions (ExaModels lacks mod node)
+- Element part of a nontrivial group wider than 64 traced fields
+- Groups named with embedded $ comments ("$ flow to" bucket) — parse issue
+
+## Environment
+
+julia --project=. always; Manifest.toml committed. MASTSIF=~/git/pkg/cutest-sif
+(1149 SIF files). Full-collection sweep: bash test/sweep_driver.sh (restartable,
+resumes from sweep_results.tsv, chunk-restarts julia every 150 problems).

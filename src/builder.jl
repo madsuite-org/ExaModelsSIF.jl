@@ -8,6 +8,27 @@
 # (Hessian-entry reading). Calibrated against SIFDecode via CUTEst.jl.
 const QUADCONV = Ref(:half)
 
+# Nontrivial groups wider than WIDE_LIN linear terms route their linear part
+# through buffered subexpressions (add_expr(...; buffered = true), ExaModels
+# compile-time-prototypes branch): partial sums of CHUNK terms each, evaluated
+# once per group into a theta-backed stage, so no traced kernel grows with the
+# group's linear width. Measured on this host: L=200 monolithic kernel needs
+# hours; chunked+buffered builds in ~16 s with exact derivatives.
+const WIDE_LIN = 16
+const CHUNK = 16
+
+struct LinChunk{X}
+    x::X
+    C::Int
+end
+function (k::LinChunk)(d)
+    acc = getproperty(d, :a1) * k.x[getproperty(d, :j1)]
+    for q in 2:k.C
+        acc = acc + getproperty(d, Symbol("a", q)) * k.x[getproperty(d, Symbol("j", q))]
+    end
+    return acc
+end
+
 getp(d, s::Symbol) = getproperty(d, s)
 
 "Build the ExaModels node for one element instance at trace time."
@@ -36,10 +57,15 @@ function elemnode(x, et::ElType, d, prefix::String)
     return feval(et.fexpr, env)
 end
 
-"Build the ExaModels node for one nontrivial group instance at trace time."
-function groupnode(x, gt::GType, ets::Vector{ElType}, L::Int, d)
+"Build the ExaModels node for one nontrivial group instance at trace time.
+`stages` is empty for narrow groups; for wide groups it carries the buffered
+partial-sum subexpressions referenced via the slot field `d.si`."
+function groupnode(x, gt::GType, ets::Vector{ElType}, L::Int, d, stages = ())
     acc = nothing
     addt(t) = (acc = acc === nothing ? t : acc + t)
+    for S in stages
+        addt(S[getp(d, :si)])
+    end
     for k in 1:L
         addt(getp(d, Symbol("a", k)) * x[getp(d, Symbol("j", k))])
     end
@@ -170,8 +196,10 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing)
     olin = Vector{Any}[]                      # (j, a)
     celem = Dict{String,Vector{Vector{Any}}}()   # etype => rows (i, w, v.., p..)
     oelem = Dict{String,Vector{Vector{Any}}}()   # etype => rows (w, v.., p..)
-    cgrp = Dict{Any,Any}()                    # signature => (names, ets, L, rows)
+    cgrp = Dict{Any,Any}()                    # narrow signature => (names, ets, L, rows)
     ogrp = Dict{Any,Any}()
+    cwide = Dict{Any,Any}()                   # wide signature => (names, ets, rows, lins)
+    owide = Dict{Any,Any}()
     objconst = 0.0
 
     for gn in P.grouporder
@@ -202,7 +230,14 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing)
         else
             gt = P.gtypes[tn]
             etnames = Tuple(eltypeof(P, P.elements[en]).name for (en, _) in g.elems)
-            sig = (iscon, tn, length(lin), etnames)
+            nelemfields = sum(Int[length(eltypeof(P, P.elements[en]).evars) +
+                length(eltypeof(P, P.elements[en]).epars) for (en, _) in g.elems])
+            wide = length(lin) > WIDE_LIN
+            # Even with the linear part buffered, the element part is traced in
+            # one kernel; refuse cleanly when that alone is too wide.
+            nelemfields + (wide ? cld(length(lin), CHUNK) : length(lin)) > 64 &&
+                error("unsupported: nontrivial group $gn too wide for " *
+                      "single-kernel tracing (elem fields=$nelemfields, nlin=$(length(lin)))")
             row = Any[]
             iscon && push!(row, rowof[gn])
             push!(row, 1.0 / s)
@@ -211,27 +246,97 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing)
                 haskey(g.gparvals, p) || error("group $gn: group parameter $p unassigned")
                 push!(row, g.gparvals[p])
             end
-            for (k, (j, a)) in enumerate(lin)
-                push!(row, a); push!(row, j)
-            end
-            ets = ElType[]
-            for (e, (ename, w)) in enumerate(g.elems)
-                push!(row, w)
-                push!(ets, pushelem!(row, P, ename))
-            end
-            if !haskey(iscon ? cgrp : ogrp, sig)
-                names = Symbol[]
-                iscon && push!(names, :i)
-                push!(names, :sinv); push!(names, :b)
-                for k in 1:length(gt.gpars); push!(names, Symbol("g", k)); end
-                for k in 1:length(lin); push!(names, Symbol("a", k)); push!(names, Symbol("j", k)); end
-                for (e, et) in enumerate(ets)
-                    push!(names, Symbol("w", e))
-                    elemfields!(names, et, "e$(e)_")
+            if wide
+                ets = ElType[]
+                for (ename, w) in g.elems
+                    push!(row, w)
+                    push!(ets, pushelem!(row, P, ename))
                 end
-                (iscon ? cgrp : ogrp)[sig] = (names, ets, length(lin), Vector{Any}[])
+                sig = (iscon, tn, etnames)
+                if !haskey(iscon ? cwide : owide, sig)
+                    names = Symbol[]
+                    iscon && push!(names, :i)
+                    push!(names, :si); push!(names, :sinv); push!(names, :b)
+                    for k in 1:length(gt.gpars); push!(names, Symbol("g", k)); end
+                    for (e, et) in enumerate(ets)
+                        push!(names, Symbol("w", e))
+                        elemfields!(names, et, "e$(e)_")
+                    end
+                    (iscon ? cwide : owide)[sig] = (names, ets, Vector{Any}[], Vector{Vector{Tuple{Float64,Int}}}())
+                end
+                b = (iscon ? cwide : owide)[sig]
+                push!(row, 0)  # placeholder; si assigned at emit (slot order)
+                # move si placeholder into position: rebuild row with si after i
+                push!(b[3], row)
+                push!(b[4], [(a, j) for (j, a) in lin])
+            else
+                for (k, (j, a)) in enumerate(lin)
+                    push!(row, a); push!(row, j)
+                end
+                ets = ElType[]
+                for (e, (ename, w)) in enumerate(g.elems)
+                    push!(row, w)
+                    push!(ets, pushelem!(row, P, ename))
+                end
+                sig = (iscon, tn, length(lin), etnames)
+                if !haskey(iscon ? cgrp : ogrp, sig)
+                    names = Symbol[]
+                    iscon && push!(names, :i)
+                    push!(names, :sinv); push!(names, :b)
+                    for k in 1:length(gt.gpars); push!(names, Symbol("g", k)); end
+                    for k in 1:length(lin); push!(names, Symbol("a", k)); push!(names, Symbol("j", k)); end
+                    for (e, et) in enumerate(ets)
+                        push!(names, Symbol("w", e))
+                        elemfields!(names, et, "e$(e)_")
+                    end
+                    (iscon ? cgrp : ogrp)[sig] = (names, ets, length(lin), Vector{Any}[])
+                end
+                push!((iscon ? cgrp : ogrp)[sig][4], row)
             end
-            push!((iscon ? cgrp : ogrp)[sig][4], row)
+        end
+    end
+
+    # --- emit a wide bucket: buffered partial-sum stages + one narrow kernel
+    emitwide = function (sig, bucket, iscon)
+        names, ets, rows, lins = bucket
+        gt = P.gtypes[sig[2]]
+        m = length(rows)
+        # assign slots in bucket order; si sits right after the optional i
+        for (slot, row) in enumerate(rows)
+            row[end] = 0  # drop placeholder tail
+            pop!(row)
+            insert!(row, iscon ? 2 : 1, slot)
+        end
+        Lmax = maximum(length.(lins))
+        nlay = cld(Lmax, CHUNK)
+        ker = LinChunk(x, CHUNK)
+        cnames = vcat([Symbol("a", k) for k in 1:CHUNK], [Symbol("j", k) for k in 1:CHUNK])
+        CNT = NamedTuple{Tuple(cnames)}
+        stages = Any[]
+        for t in 1:nlay
+            layer = Vector{Any}[]
+            for terms in lins
+                ch = terms[min((t-1)*CHUNK+1, length(terms)+1) : min(t*CHUNK, length(terms))]
+                chv = Any[]
+                for (a, j) in ch; push!(chv, a); end
+                for _ in 1:(CHUNK - length(ch)); push!(chv, 0.0); end
+                for (a, j) in ch; push!(chv, j); end
+                for _ in 1:(CHUNK - length(ch)); push!(chv, 1); end
+                push!(layer, chv)
+            end
+            data = [CNT(Tuple(r)) for r in layer]
+            local S
+            c, S = ExaModels.add_expr(c, Base.Generator(ker, data); buffered = true)
+            push!(stages, S)
+        end
+        st = Tuple(stages)
+        data = ntvec(names, rows)
+        if iscon
+            c, _ = ExaModels.add_con!(c, con,
+                Base.Generator(d -> d.i => groupnode(x, gt, ets, 0, d, st), data))
+        else
+            c, _ = ExaModels.add_obj(c,
+                Base.Generator(d -> groupnode(x, gt, ets, 0, d, st), data))
         end
     end
 
@@ -258,6 +363,9 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing)
         c, _ = ExaModels.add_con!(c, con,
             Base.Generator(d -> d.i => groupnode(x, gt, ets, L, d), data))
     end
+    for (sig, bucket) in cwide
+        emitwide(sig, bucket, true)
+    end
 
     # --- emit objective terms
     if !isempty(olin)
@@ -277,6 +385,9 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing)
         data = ntvec(names, rows)
         c, _ = ExaModels.add_obj(c,
             Base.Generator(d -> groupnode(x, gt, ets, L, d), data))
+    end
+    for (sig, bucket) in owide
+        emitwide(sig, bucket, false)
     end
     if !isempty(P.quad)
         qrows = Vector{Any}[Any[i, j,

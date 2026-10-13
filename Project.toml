@@ -9,7 +9,7 @@ ExaModels = "1037b233-b668-4ce9-9b63-f9f681f55dd2"
 NLPModels = "a4795742-8479-5a88-8948-cc11e1c8c1a6"
 
 [sources]
-ExaModels = {path = "/home/sushin/git/pkg/ExaModels.jl"}
+ExaModels = {path = "/home/sushin/git/worktrees/ExaModels-ctp"}
 
 [compat]
 CUTEst = "1.4.0"

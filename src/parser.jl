@@ -147,7 +147,8 @@ mutable struct State
     firstbound::Bool           # whether any explicit per-var bound seen yet
 end
 
-parsenum(s::AbstractString) = parse(Float64, replace(s, r"[dD]" => "e"))
+parsenum(s::AbstractString) =
+    parse(Float64, replace(s, r"[dD](?=[0-9+-])" => "e", " " => ""))
 
 function resolveint(st::State, tok::AbstractString)
     v = tryparse(Int, tok)
@@ -158,13 +159,11 @@ end
 
 "Expand an array name like X(I+1) or Y(1,J) to its flat instantiated name."
 function expandname(st::State, name::AbstractString)
-    i = findfirst('(', name)
-    i === nothing && return String(name)
-    endswith(name, ')') || error("malformed array name '$name'")
-    base = name[1:i-1]
-    inner = name[i+1:end-1]
-    idx = [string(resolveint(st, strip(tok))) for tok in split(inner, ',')]
-    return base * join(idx, ",")
+    occursin('(', name) || return String(name)
+    return replace(name, r"\(([^()]*)\)" => m -> begin
+        inner = m[2:end-1]
+        join([string(resolveint(st, strip(tok))) for tok in split(inner, ',')], ",")
+    end)
 end
 
 getrp(st::State, tok::AbstractString) = begin
@@ -176,6 +175,11 @@ end
 const IPARAM = Set(["IE", "IA", "IS", "IM", "ID", "I=", "I+", "I-", "I*", "I/"])
 const RPARAM = Set(["RE", "RA", "RS", "RM", "RD", "R=", "R+", "R-", "R*", "R/",
                     "RI", "RF", "R("])
+# Array real-parameter codes: identical semantics to the R-codes, with array
+# names (expanded by expandname like any other name).
+const APARAM = Dict("AE" => "RE", "AA" => "RA", "AS" => "RS", "AM" => "RM",
+    "AD" => "RD", "A=" => "R=", "A+" => "R+", "A-" => "R-", "A*" => "R*",
+    "A/" => "R/", "AI" => "RI", "AF" => "RF", "A(" => "R(")
 
 function handle_iparam!(st::State, cd::Card)
     dest = expandname(st, cd.f2)
@@ -286,6 +290,8 @@ function handle_card!(st::State, cd::Card)
     code = cd.code
     code in IPARAM && return handle_iparam!(st, cd)
     code in RPARAM && return handle_rparam!(st, cd)
+    haskey(APARAM, code) && return handle_rparam!(st,
+        Card(APARAM[code], cd.f2, cd.f3, cd.f4, cd.f5, cd.f6, cd.expr))
     sec = st.section
     if sec == "VARIABLES" || sec == "COLUMNS"
         handle_variables!(st, cd)
@@ -299,7 +305,7 @@ function handle_card!(st::State, cd::Card)
         handle_bounds!(st, cd)
     elseif sec == "START POINT"
         handle_start!(st, cd)
-    elseif sec in ("QUADRATIC", "QUADS", "QUADOBJ", "HESSIAN")
+    elseif sec in ("QUADRATIC", "QUADS", "QUADOBJ", "HESSIAN", "QMATRIX", "QSECTION")
         handle_quadratic!(st, cd)
     elseif sec == "ELEMENT TYPE"
         handle_eltype!(st, cd)
@@ -574,20 +580,24 @@ function run_cards!(st::State, cards, i0::Int, i1::Int)
                 step = resolveint(st, cards[j].f3)
                 j += 1
             end
+            # OD ends the innermost loop; ND ends ALL open loops, so it
+            # terminates this scan at any depth. An inner loop whose shared ND
+            # lies outside the enclosing body slice terminates at end-of-range.
             depth = 1
             k = j
             while k <= i1
                 c2 = cards[k]
                 if c2 isa Card
                     c2.code == "DO" && (depth += 1)
-                    if c2.code == "ND" || c2.code == "OD"
+                    if c2.code == "OD"
                         depth -= 1
                         depth == 0 && break
+                    elseif c2.code == "ND"
+                        break
                     end
                 end
                 k += 1
             end
-            depth == 0 || error("unterminated DO loop")
             v = lo
             while (step > 0 ? v <= hi : v >= hi)
                 st.ip[var] = v

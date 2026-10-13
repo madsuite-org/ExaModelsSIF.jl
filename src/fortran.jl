@@ -19,6 +19,7 @@ const JLFUN = Dict{Symbol,Function}(
     :SINH => sinh, :COSH => cosh, :TANH => tanh,
     :SQRT => sqrt, :ABS => abs,
     :MAX => max, :MIN => min, :MOD => mod,
+    :ARCTAN => atan, :ARCSIN => asin, :ARCCOS => acos,
 )
 
 """
@@ -32,6 +33,10 @@ expression tree when the env contains nodes.
 function feval(e, env::AbstractDict{Symbol,<:Any})
     if e isa Symbol
         haskey(env, e) && return env[e]
+        u = Symbol(uppercase(String(e)))
+        for (k, v) in env
+            Symbol(uppercase(String(k))) === u && return v
+        end
         error("SIF expression references undefined symbol $e")
     elseif e isa Number
         return e isa Integer ? e : Float64(e)

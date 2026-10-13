@@ -48,4 +48,4 @@ local collection and writes `sweep_results.tsv`.
 All scripts run under the project environment (`julia --project=.`); the
 committed `Manifest.toml` pins every dependency. `ExaModels` is consumed as
 a path source (`~/git/pkg/ExaModels.jl`, shared across the cluster via NFS);
-the validated revision is madsuite-org/ExaModels.jl commit `455516f1ce8af9ed6c836933f6ef08e0ad945c0c`.
+the validated revision is madsuite-org/ExaModels.jl branch compile-time-prototypes, commit `fe407fc0968ac52762965f57a1f10767ad9da5d9` (worktree ~/git/worktrees/ExaModels-ctp). See STATUS.md.

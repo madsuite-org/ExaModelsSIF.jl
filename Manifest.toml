@@ -2,7 +2,7 @@
 
 julia_version = "1.13.1"
 manifest_format = "2.1"
-project_hash = "e9a4cd890a03544193534a9e8645079c07cdcf9a"
+project_hash = "38f4150631655a6b75a58e299112aef5cfb0f2b2"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra"]
@@ -98,7 +98,7 @@ version = "1.7.0"
 
 [[deps.ExaModels]]
 deps = ["Adapt", "NLPModels", "Printf", "SolverCore"]
-path = "/home/sushin/git/pkg/ExaModels.jl"
+path = "/home/sushin/git/worktrees/ExaModels-ctp"
 uuid = "1037b233-b668-4ce9-9b63-f9f681f55dd2"
 version = "0.12.0"
 
