@@ -86,20 +86,23 @@ function card(ln::AbstractString)
     di !== nothing && (ln = ln[1:first(di)-1])
     L = lastindex(ln)
     g(a, b) = a <= L ? String(strip(ln[a:min(b, L)])) : ""
-    # (name, value) pairs tokenize within their combined column span so a value
-    # bleeding one column into the name field still parses (e.g. TORSIONA).
-    # The first token is the name only if it STARTS within the name subfield
-    # (columns a..a+9); otherwise everything is the value.
+    # (name, value) pairs: the name is the 10-column name subfield verbatim
+    # (names may contain interior blanks, e.g. HELSBY "N      1") and the value
+    # is the rest — EXCEPT when the name field's trailing token joined with the
+    # value field forms a number (misaligned value bleeding left, TORSIONA
+    # "C(I,J)   0" + ".25" -> name "C(I,J)", value "0.25").
     function pair(a, b)
         a > L && return ("", "")
-        seg = ln[a:min(b, L)]
-        t = collect(eachmatch(r"\S+", seg))
-        isempty(t) && return ("", "")
-        if t[1].offset <= 10   # name subfield is 10 columns wide
-            length(t) == 1 && return (String(t[1].match), "")
-            return (String(t[1].match), String(join((m.match for m in t[2:end]), "")))
+        nf = g(a, a + 9)
+        vf = a + 10 <= L ? String(strip(ln[a+10:min(b, L)])) : ""
+        mm = match(r"^(.*\S)\s+(\S+)$", nf)
+        if mm !== nothing
+            merged = replace(mm[2] * vf, " " => "")
+            if tryparse(Float64, replace(merged, r"[dD](?=[0-9+-])" => "e")) !== nothing
+                return (String(mm[1]), merged)
+            end
         end
-        return ("", String(join((m.match for m in t), "")))
+        return (nf, vf)
     end
     f3, f4 = pair(15, 36)
     f5, f6 = pair(40, 61)
@@ -339,6 +342,9 @@ function handle_card!(st::State, cd::Card)
     haskey(APARAM, code) && return handle_rparam!(st,
         Card(APARAM[code], cd.f2, cd.f3, cd.f4, cd.f5, cd.f6, cd.expr))
     sec = st.section
+    if sec == "" && isempty(code)
+        return   # stray unmarked comment line before the first section
+    end
     # Only the first named set applies in these sections; later sets are
     # alternative constants/bounds/starts (e.g. recorded solutions).
     if sec in ("CONSTANTS", "RHS", "RHS'", "RANGES", "BOUNDS", "START POINT") &&
@@ -376,7 +382,7 @@ function handle_card!(st::State, cd::Card)
 end
 
 function handle_variables!(st::State, cd::Card)
-    cd.code in ("", "X", "Z") ||
+    cd.code in ("", "X", "XN", "Z") ||
         error("unsupported VARIABLES code '$(cd.code)'")
     v = getvar!(st, expandname(st, cd.f2))
     if unquote(cd.f3) == "SCALE"
@@ -421,7 +427,7 @@ function handle_groups!(st::State, cd::Card)
         for (vn, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
             isempty(vn) && continue
             v = getvar!(st, expandname(st, vn))
-            push!(g.lin, v => parsenum(val))
+            push!(g.lin, v => isempty(val) ? 1.0 : parsenum(val))
         end
     end
 end
@@ -511,7 +517,7 @@ function handle_start!(st::State, cd::Card)
     end
     for (tok, sval) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
         isempty(tok) && continue
-        val = parsenum(sval)
+        val = isempty(sval) ? 0.0 : parsenum(sval)
         if unquote(tok) == "DEFAULT"
             fill!(P.x0, val)
         else
@@ -703,6 +709,7 @@ end
 # -------- function-part (ELEMENTS / GROUPS) parser
 
 function parse_funpart(lines, isgroup::Bool)
+    fdecls = Set{Symbol}()
     temps_global = Pair{Symbol,Any}[]
     blocks = Dict{String,NamedTuple}()
     cur = nothing            # current type name
@@ -746,6 +753,7 @@ function parse_funpart(lines, isgroup::Bool)
         end
         flushpend!()
         if section == "TEMPORARIES"
+            code == "F" && push!(fdecls, Symbol(cd.f2))
             continue  # R/I/M/L declarations carry no information we need
         elseif section == "GLOBALS"
             if code == "A"
@@ -777,7 +785,7 @@ function parse_funpart(lines, isgroup::Bool)
         end
     end
     flushblock!()
-    return temps_global, blocks
+    return temps_global, blocks, fdecls
 end
 
 # ------------------------------------------------------------------ driver
@@ -796,21 +804,38 @@ function sif_decode(path::AbstractString; loopfinal::Symbol = :last)
     run_cards!(st, datacards, 1, length(datacards))
     P = st.P
 
-    gtemps_e, eblocks = parse_funpart(elemlines, false)
-    gtemps_g, gblocks = parse_funpart(grouplines, true)
+    gtemps_e, eblocks, fdecl_e = parse_funpart(elemlines, false)
+    gtemps_g, gblocks, fdecl_g = parse_funpart(grouplines, true)
+
+    function checkexternal(tname, temps, fexpr, fdecls)
+        isempty(fdecls) && return
+        syms = fexpr === nothing ? Set{Symbol}() : union!(freesyms(fexpr), callheads(fexpr))
+        for (nm, ent) in temps
+            union!(syms, entdeps(ent))
+            union!(syms, callheads(entast(ent)))
+        end
+        for fn in fdecls
+            fn in syms && error("type $tname uses external Fortran function " *
+                                "$fn (hand-coded Fortran; unsupported)")
+        end
+    end
 
     for (tname, blk) in eblocks
         d = get(_typedecls, tname, nothing)
         d === nothing && error("element type $tname has a function body but no declaration")
+        temps = vcat(gtemps_e, blk.temps)
+        checkexternal(tname, temps, blk.fexpr, fdecl_e)
         P.eltypes[tname] = ElType(tname, d.evars, d.ivars, d.epars, blk.rows,
-                                  vcat(gtemps_e, blk.temps), blk.fexpr)
+                                  temps, blk.fexpr)
     end
     for (tname, blk) in gblocks
         d = get(_typedecls, "G#" * tname, nothing)
         d === nothing && error("group type $tname has a function body but no declaration")
         isempty(d.evars) && error("group type $tname has no GV variable")
+        temps = vcat(gtemps_g, blk.temps)
+        checkexternal(tname, temps, blk.fexpr, fdecl_g)
         P.gtypes[tname] = GType(tname, d.evars[1], d.epars,
-                                vcat(gtemps_g, blk.temps), blk.fexpr)
+                                temps, blk.fexpr)
     end
     return P
 end

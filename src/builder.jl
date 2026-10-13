@@ -44,10 +44,6 @@ struct ElPlan
     symbolic::Vector{Pair{Symbol,Any}}
 end
 
-entdeps(ent) = ent isa CondAssign ? union!(freesyms(ent.ast), Set([ent.cond])) :
-               freesyms(ent)
-entast(ent) = ent isa CondAssign ? ent.ast : ent
-
 function elplan(et::ElType)
     pset = Set(et.epars)
     ponames = Set{Symbol}()

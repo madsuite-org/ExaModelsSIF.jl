@@ -3,7 +3,7 @@
 using ExaModelsSIF, ExaModels, CUTEst, NLPModels
 using Random, Printf, LinearAlgebra, SparseArrays
 
-ENV["MASTSIF"] = get(ENV, "MASTSIF", expanduser("~/git/pkg/cutest-sif"))
+ENV["MASTSIF"] = get(ENV, "MASTSIF", "/home/sushin/.julia/artifacts/1fa01d4c3b344b8cd32b8ef78c0abeac9bb9cce2")  # canonical: CUTEst_jll artifact
 
 const PILOT = ["ROSENBR", "HS1", "HS2", "HS3", "HS4", "HS5", "HS6", "HS7",
     "HS10", "HS11", "HS14", "HS21", "HS26", "HS28", "HS35", "HS45",

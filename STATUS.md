@@ -67,6 +67,10 @@ L=96→5.8s, L=200→16s, L=400→59s; obj/grad exact, Hessian to fd-noise (1e-8
 
 ## Environment
 
-julia --project=. always; Manifest.toml committed. MASTSIF=~/git/pkg/cutest-sif
-(1149 SIF files). Full-collection sweep: bash test/sweep_driver.sh (restartable,
-resumes from sweep_results.tsv, chunk-restarts julia every 150 problems).
+julia --project=. always; Manifest.toml committed. Canonical SIF collection:
+the CUTEst_jll artifact (1548 problems) — exactly what the Fortran reference
+decodes. The old ~/git/pkg/cutest-sif mirror (lpoo/cutest-sif, 1149 files) is
+stale: 390 files differ, 411 problems missing, 12 removed upstream. Progress
+denominators are /1548 from round 4 on. Full-collection sweep:
+bash test/sweep_driver.sh N (restartable, shardable, resumes from
+sweep_results*.tsv; SWEEP_ONLY=<file> restricts to listed names).

@@ -16,6 +16,9 @@ function fparse(s::AbstractString)
     t = replace(t, r"(?<=[0-9.])[dD](?=[+-]?[0-9])" => "e")
     # Fortran allows blanks between a function name and its argument list
     t = replace(t, r"([A-Za-z][A-Za-z0-9_]*)\s+\(" => s"\1(")
+    # ... and inside numeric literals ("1. 0" is 1.0)
+    t = replace(t, r"([0-9]\.)\s+([0-9])" => s"\1\2")
+    t = replace(t, r"([0-9])\s+(\.[0-9])" => s"\1\2")
     ex = Meta.parse(t)
     return ex
 end
@@ -95,6 +98,8 @@ function fapply(op::Symbol, args)
     end
     if op === :(<=) || op === :(<) || op === :(>=) || op === :(>) ||
        op === :(==) || op === :(!=)
+        (args[1] isa Number && args[2] isa Number) ||
+            error("unsupported: variable-dependent conditional (comparison on a model expression)")
         return getfield(Base, op)(args[1], args[2])
     elseif op === :!
         return !args[1]
@@ -104,6 +109,19 @@ function fapply(op::Symbol, args)
     return f(args...)
 end
 
+"Collect call-head symbols (function names) of a parsed expression."
+function callheads(e, acc = Set{Symbol}())
+    if e isa Expr
+        if e.head === :call && e.args[1] isa Symbol
+            push!(acc, e.args[1])
+        end
+        for a in e.args
+            callheads(a, acc)
+        end
+    end
+    return acc
+end
+
 "A conditional assignment card in INDIVIDUALS: `target = ast` when the logical
 temporary `cond` is `sense` (I-card: sense=true, E-card: sense=false)."
 struct CondAssign
@@ -111,6 +129,10 @@ struct CondAssign
     sense::Bool
     ast::Any
 end
+
+entdeps(ent) = ent isa CondAssign ? union!(freesyms(ent.ast), Set([ent.cond])) :
+               freesyms(ent)
+entast(ent) = ent isa CondAssign ? ent.ast : ent
 
 "Collect free symbols of a parsed expression (call heads and comparison
 operators excluded)."
