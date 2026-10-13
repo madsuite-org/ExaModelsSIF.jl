@@ -8,7 +8,9 @@ ENV["MASTSIF"] = get(ENV, "MASTSIF", "/home/sushin/.julia/artifacts/1fa01d4c3b34
 
 # problems whose mastsif hand-coded Hessian contradicts finite differences of
 # the reference gradient while ours matches (see STATUS.md)
-const HESS_REF_BUGS = Set(["GULF"])
+const HESS_REF_BUGS = Set(["GULF", "WATSON", "HIMMELBB",
+    "HIMMELBF", "MAXLIKA"])   # fd of the reference gradient matches OUR
+    # Hessian and contradicts the reference's hand-coded H (2026-10-13)
 
 # ill-conditioned problems where the Fortran reference itself carries float
 # noise: BigFloat adjudication (2026-10-13) puts OUR Float64 at 7e-15 of the
