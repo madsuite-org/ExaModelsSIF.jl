@@ -14,7 +14,12 @@ const QUADCONV = Ref(:half)
 # partial sums evaluated once per group into a theta-backed stage, so no traced
 # kernel grows with the group's width. Measured on 002: L=200 monolithic kernel
 # needs hours; chunked+buffered builds in ~16 s with exact derivatives.
-const WIDE_LIN = 16
+# Low threshold: inlining the linear part creates one traced kernel per
+# DISTINCT (group type, L) pair, and problems like LRW1A carry ~70 distinct
+# widths of an expensive group type (hours of compilation). Beyond L=4 the
+# linear part goes through shared buffered LinChunk stages, so all widths of a
+# group type collapse into one bucket.
+const WIDE_LIN = 4
 const CHUNK = 16
 const ELEM_BUDGET = 40     # max element data fields traced in one kernel
 const ELEM_CHUNK = 24      # target element-field count per buffered elem stage
