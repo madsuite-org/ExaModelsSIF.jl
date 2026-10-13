@@ -21,6 +21,18 @@ const ELEM_CHUNK = 24      # target element-field count per buffered elem stage
 
 getp(d, s::Symbol) = getproperty(d, s)
 
+# Branch-select multiply: bselect(s, x) = s*x with the convention 0*x = 0 even
+# for x = Inf/NaN, so an INACTIVE conditional branch cannot poison the blend
+# (QC-class guarded logs). All derivative stubs are inert: the step factor s
+# carries zero derivative by construction, and d/dx is s itself.
+bselect(s, x) = iszero(s) ? zero(x) : s * x
+_bs_d1(s, x) = zero(s)
+_bs_d2(s, x) = s
+_bs_d11(s, x) = zero(s)
+_bs_d12(s, x) = zero(s)
+_bs_d22(s, x) = zero(s)
+ExaModels.@register_bivariate(bselect, _bs_d1, _bs_d2, _bs_d11, _bs_d12, _bs_d22)
+
 struct LinChunk{X}
     x::X
     C::Int
@@ -94,6 +106,35 @@ function evalparamtemps(plan::ElPlan, et::ElType, e::SIFElement)
     return vals
 end
 
+"Evaluate temporaries symbolically; conditional assignments blend branches
+with exact step factors (see relstep), so variable-dependent conditionals
+reproduce SIFDecode's branch-selected values and derivatives."
+function evaltemps!(env, temps)
+    for (nm, ent) in temps
+        if ent isa CondAssign
+            haskey(env, ent.cond) ||
+                error("conditional on undefined temporary $(ent.cond)")
+            s = tostep(env[ent.cond])
+            v = feval(ent.ast, env)
+            w = ent.sense ? s : (s isa Number ? 1.0 - s : 1.0 - s)
+            if s isa Number
+                (w == 1.0) && (env[nm] = v)
+                (w == 0.0) || (w == 1.0) ||
+                    error("non-binary numeric condition for $(ent.cond)")
+            else
+                prev = get(env, nm, nothing)
+                if prev === nothing
+                    env[nm] = bselect(w, v)
+                else
+                    env[nm] = bselect(w, v) + bselect(1.0 - w, prev)
+                end
+            end
+        else
+            env[nm] = feval(ent, env)
+        end
+    end
+end
+
 "Build the ExaModels node for one element instance at trace time."
 function elemnode(x, et::ElType, plan::ElPlan, d, prefix::String, vs::Bool = false)
     env = Dict{Symbol,Any}()
@@ -117,11 +158,7 @@ function elemnode(x, et::ElType, plan::ElPlan, d, prefix::String, vs::Bool = fal
     for (k, nm) in enumerate(plan.inject)
         env[nm] = getp(d, Symbol(prefix, "t", k))
     end
-    for (nm, ent) in plan.symbolic
-        ent isa CondAssign &&
-            error("element type $(et.name): variable-dependent conditional unsupported")
-        env[nm] = feval(ent, env)
-    end
+    evaltemps!(env, plan.symbolic)
     et.fexpr === nothing && error("element type $(et.name) has no F expression")
     return feval(et.fexpr, env)
 end
@@ -148,27 +185,23 @@ function groupnode(x, gt::GType, ets::Vector{ElType}, plans::Vector{ElPlan},
     for (k, p) in enumerate(gt.gpars)
         env[p] = getp(d, Symbol("g", k))
     end
-    for (nm, ent) in gt.temps
-        ent isa CondAssign &&
-            error("group type $(gt.name): conditional temporaries unsupported")
-        env[nm] = feval(ent, env)
-    end
+    evaltemps!(env, gt.temps)
     return feval(gt.fexpr, env) * getp(d, :sinv)
 end
 
-"Kernel for one buffered element-chunk stage: sum of weighted elements at
-positions `pos` of a wide group's element list."
+"Kernel for one buffered element-chunk stage: sum of the chunk's weighted
+elements. Field names are chunk-RELATIVE (c1_, c2_, ...), so chunks with the
+same element-type composition share one traced tree type and compile once."
 struct ElemChunk{X}
     x::X
     ets::Vector{ElType}
     plans::Vector{ElPlan}
-    pos::Vector{Int}
     vs::Bool
 end
 function (k::ElemChunk)(d)
     acc = nothing
-    for (idx, e) in enumerate(k.pos)
-        t = getp(d, Symbol("w", e)) * elemnode(k.x, k.ets[idx], k.plans[idx], d, "e$(e)_", k.vs)
+    for rel in 1:length(k.ets)
+        t = getp(d, Symbol("w", rel)) * elemnode(k.x, k.ets[rel], k.plans[rel], d, "c$(rel)_", k.vs)
         acc = acc === nothing ? t : acc + t
     end
     return acc
@@ -459,9 +492,9 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing)
             offs = cumsum(vcat(0, fw))
             for pos in chunks
                 names = Symbol[]
-                for e in pos
-                    push!(names, Symbol("w", e))
-                    elemfields!(names, ets[e], epls[e], "e$(e)_", hasvs)
+                for (rel, e) in enumerate(pos)
+                    push!(names, Symbol("w", rel))
+                    elemfields!(names, ets[e], epls[e], "c$(rel)_", hasvs)
                 end
                 data = Vector{Any}[]
                 for erow in elemrows
@@ -471,12 +504,14 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing)
                     end
                     push!(data, rowv)
                 end
-                ker = ElemChunk(x, ets[pos], epls[pos], pos, hasvs)
+                ker = ElemChunk(x, ets[pos], epls[pos], hasvs)
                 local S
                 c, S = ExaModels.add_expr(c, Base.Generator(ker, ntvec(names, data)); buffered = true)
                 push!(stages, S)
             end
         end
+        length(stages) > 64 && error("unsupported: wide group needs " *
+            "$(length(stages)) buffered stages (reduction-tree lowering pending)")
         hnames = Symbol[]
         iscon && push!(hnames, :i)
         push!(hnames, :si); push!(hnames, :sinv); push!(hnames, :b)

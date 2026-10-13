@@ -503,9 +503,9 @@ end
 function handle_start!(st::State, cd::Card)
     code = cd.code
     P = st.P
-    code in ("", "X", "V", "XV", "ZV") ||
+    code in ("", "X", "V", "XV", "ZV", "Z") ||
         return   # dual-value starts and other exotics: ignore
-    if code == "ZV"
+    if code == "ZV" || code == "Z"
         tok = cd.f3
         val = getrp(st, cd.f5)
         if unquote(tok) == "DEFAULT"
