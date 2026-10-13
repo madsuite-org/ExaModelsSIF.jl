@@ -1,6 +1,2 @@
-# Instances pending the ExaModels PR (bselect + _amul guarded adjoints + mod):
-# values/derivatives need branch-annihilating blends or the mod intrinsic.
-# Skip until the PR merges and compile-time-prototypes rebases on it.
-QC
-QCNEW
-ARTIF
+# Instances pending ExaModels issue #331 (reduction over many buffered stages):
+# FMINSURF/ODNAMUR/POWER/PENALTY1 class fails fast with "reduction-tree lowering pending".

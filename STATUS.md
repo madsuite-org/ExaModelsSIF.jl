@@ -8,7 +8,7 @@ when the implementation or the ExaModels dependency changes.
 ## Dependency
 
 - ExaModels branch `compile-time-prototypes` (madsuite-org/ExaModels.jl),
-  worktree ~/git/worktrees/ExaModels-ctp, commit `fe407fc0968ac52762965f57a1f10767ad9da5d9`.
+  worktree ~/git/worktrees/ExaModels-ctp, branch ctp-plus-330 (compile-time-prototypes merged with main incl. PR #330: bselect/_amul/mod), commit `a683815f6b74cbb2017f862ffd2a4e144484b5aa`.
   Provides `add_expr(...; buffered = true)` (cached subexpressions) used for
   wide-group lowering. Re-pin + re-run pilot when this moves.
 

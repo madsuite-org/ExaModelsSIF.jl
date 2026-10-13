@@ -21,17 +21,16 @@ const ELEM_CHUNK = 24      # target element-field count per buffered elem stage
 
 getp(d, s::Symbol) = getproperty(d, s)
 
-# Branch-select multiply: bselect(s, x) = s*x with the convention 0*x = 0 even
-# for x = Inf/NaN, so an INACTIVE conditional branch cannot poison the blend
-# (QC-class guarded logs). All derivative stubs are inert: the step factor s
-# carries zero derivative by construction, and d/dx is s itself.
-bselect(s, x) = iszero(s) ? zero(x) : s * x
-_bs_d1(s, x) = zero(s)
-_bs_d2(s, x) = s
-_bs_d11(s, x) = zero(s)
-_bs_d12(s, x) = zero(s)
-_bs_d22(s, x) = zero(s)
-ExaModels.@register_bivariate(bselect, _bs_d1, _bs_d2, _bs_d11, _bs_d12, _bs_d22)
+# Branch-select multiply (0 * x == 0 even for non-finite x): provided by
+# ExaModels since PR #330; a local registration is kept only as a fallback for
+# older ExaModels revisions.
+@static if isdefined(ExaModels, :bselect)
+    const bselect = ExaModels.bselect
+else
+    bselect(s::Real, x::Real) = ifelse(iszero(s), zero(x), s * x)
+    ExaModels.@register_bivariate(bselect, (s, x) -> zero(s), (s, x) -> s,
+        (s, x) -> zero(s), (s, x) -> zero(s), (s, x) -> zero(s))
+end
 
 struct LinChunk{X}
     x::X
