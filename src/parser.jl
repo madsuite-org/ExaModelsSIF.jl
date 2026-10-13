@@ -319,19 +319,11 @@ end
 function getgroup!(st::State, name::AbstractString, kind::Union{Nothing,Char})
     P = st.P
     if haskey(P.groups, name)
-        g = P.groups[name]
-        if kind !== nothing && (g.kind == 'N') != (kind == 'N')
-            alias = name * "\x01old"
-            haskey(P.groups, alias) && error("group $name redeclared twice across namespaces")
-            P.groups[alias] = g
-            i = findfirst(==(name), P.grouporder)
-            P.grouporder[i] = alias
-            g.name = alias
-        else
-            kind !== nothing && g.kind != kind &&
-                error("group $name redeclared with kind $kind (was $(g.kind))")
-            return g
-        end
+        # First declaration wins: a later card with a different kind only adds
+        # its terms to the existing group (measured on LUKVLE2/LUKVLE4, where
+        # XN C(I) objective groups and XE C(K) cards overlap and SIFDecode
+        # keeps C(1..4999) as objective groups, ncon = 4999).
+        return P.groups[name]
     end
     kind === nothing && error("group '$name' referenced before declaration")
     g = SIFGroup(String(name), kind, nothing, 1.0, 0.0, nothing,
