@@ -46,8 +46,18 @@ function run_sweep()
                 P = sif_decode(joinpath(DIR, f))
                 nvar = length(P.varnames)
             catch err
-                status = "DECODE_FAIL"
-                detail = sprint(showerror, err)
+                if err isa ExaModelsSIF.ExternalFortranError
+                    try
+                        ExaModelsSIF.cutest_oracle_model(joinpath(DIR, f))
+                        status = "OK_ORACLE"
+                    catch err2
+                        status = "ORACLE_FAIL"
+                        detail = sprint(showerror, err2)
+                    end
+                else
+                    status = "DECODE_FAIL"
+                    detail = sprint(showerror, err)
+                end
             end
             if isempty(status)
                 if nvar > 2_000_000
