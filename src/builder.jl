@@ -310,6 +310,12 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing)
         end
     end
 
+    # CUTEst convention: bound magnitudes >= 1e20 are infinite
+    for i in 1:ncon
+        lcon[i] <= -1e20 && (lcon[i] = T(-Inf))
+        ucon[i] >= 1e20 && (ucon[i] = T(Inf))
+    end
+
     con = nothing
     if ncon > 0
         c, con = ExaModels.add_con(c, ncon; lcon = lcon, ucon = ucon)
