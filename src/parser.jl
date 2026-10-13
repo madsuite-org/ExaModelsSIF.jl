@@ -842,6 +842,11 @@ function sif_decode(path::AbstractString; loopfinal::Symbol = :last,
                loopfinal, Dict{String,String}(), Dict{String,Any}(params))
     run_cards!(st, datacards, 1, length(datacards))
     P = st.P
+    # CUTEst convention: bound magnitudes >= 1e20 are infinite
+    for j in eachindex(P.lvar)
+        P.lvar[j] <= -1e20 && (P.lvar[j] = -Inf)
+        P.uvar[j] >= 1e20 && (P.uvar[j] = Inf)
+    end
 
     gtemps_e, eblocks, fdecl_e = parse_funpart(elemlines, false)
     gtemps_g, gblocks, fdecl_g = parse_funpart(grouplines, true)
