@@ -14,6 +14,8 @@ function fparse(s::AbstractString)
         r"\.NOT\."i => " !", r"\.TRUE\."i => " true ", r"\.FALSE\."i => " false ")
     # Fortran D exponents: 1.0D0, 2.D-3, .5D+2 -> e
     t = replace(t, r"(?<=[0-9.])[dD](?=[+-]?[0-9])" => "e")
+    # Fortran allows blanks between a function name and its argument list
+    t = replace(t, r"([A-Za-z][A-Za-z0-9_]*)\s+\(" => s"\1(")
     ex = Meta.parse(t)
     return ex
 end
@@ -27,6 +29,9 @@ const JLFUN = Dict{Symbol,Function}(
     :SQRT => sqrt, :ABS => abs,
     :MAX => max, :MIN => min, :MOD => mod,
     :ARCTAN => atan, :ARCSIN => asin, :ARCCOS => acos,
+    :DBLE => identity, :FLOAT => identity, :REAL => identity,
+    :SIGN => (a, b) -> abs(a) * (b < 0 ? -1.0 : 1.0),
+    :INT => x -> trunc(x), :AINT => x -> trunc(x), :NINT => x -> round(x),
 )
 
 """

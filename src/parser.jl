@@ -86,7 +86,24 @@ function card(ln::AbstractString)
     di !== nothing && (ln = ln[1:first(di)-1])
     L = lastindex(ln)
     g(a, b) = a <= L ? String(strip(ln[a:min(b, L)])) : ""
-    Card(g(2, 3), g(5, 14), g(15, 24), g(25, 36), g(40, 49), g(50, 61),
+    # (name, value) pairs tokenize within their combined column span so a value
+    # bleeding one column into the name field still parses (e.g. TORSIONA).
+    # The first token is the name only if it STARTS within the name subfield
+    # (columns a..a+9); otherwise everything is the value.
+    function pair(a, b)
+        a > L && return ("", "")
+        seg = ln[a:min(b, L)]
+        t = collect(eachmatch(r"\S+", seg))
+        isempty(t) && return ("", "")
+        if t[1].offset <= 10   # name subfield is 10 columns wide
+            length(t) == 1 && return (String(t[1].match), "")
+            return (String(t[1].match), String(join((m.match for m in t[2:end]), "")))
+        end
+        return ("", String(join((m.match for m in t), "")))
+    end
+    f3, f4 = pair(15, 36)
+    f5, f6 = pair(40, 61)
+    Card(g(2, 3), g(5, 14), f3, f4, f5, f6,
          L >= 25 ? String(rstrip(ln[25:L])) : "")
 end
 
@@ -281,9 +298,18 @@ function getgroup!(st::State, name::AbstractString, kind::Union{Nothing,Char})
     P = st.P
     if haskey(P.groups, name)
         g = P.groups[name]
-        kind !== nothing && g.kind != kind &&
-            error("group $name redeclared with kind $kind (was $(g.kind))")
-        return g
+        if kind !== nothing && (g.kind == 'N') != (kind == 'N')
+            alias = name * "\x01old"
+            haskey(P.groups, alias) && error("group $name redeclared twice across namespaces")
+            P.groups[alias] = g
+            i = findfirst(==(name), P.grouporder)
+            P.grouporder[i] = alias
+            g.name = alias
+        else
+            kind !== nothing && g.kind != kind &&
+                error("group $name redeclared with kind $kind (was $(g.kind))")
+            return g
+        end
     end
     kind === nothing && error("group '$name' referenced before declaration")
     g = SIFGroup(String(name), kind, nothing, 1.0, 0.0, nothing,
@@ -428,8 +454,13 @@ function handle_ranges!(st::State, cd::Card)
     end
     for (gn, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
         isempty(gn) && continue
-        g = getgroup!(st, expandname(st, gn), nothing)
-        g.range_ = parsenum(val)
+        if unquote(gn) == "DEFAULT"
+            v = parsenum(val)
+            for g in values(st.P.groups); g.range_ = v; end
+        else
+            g = getgroup!(st, expandname(st, gn), nothing)
+            g.range_ = parsenum(val)
+        end
     end
 end
 
@@ -567,6 +598,9 @@ end
 
 function handle_guses!(st::State, cd::Card)
     code = cd.code
+    if isempty(code) && haskey(_typedecls, "G#" * cd.f3)
+        code = "T"
+    end
     if code in ("T", "XT")
         if unquote(cd.f2) == "DEFAULT"
             st.P.default_gtype = cd.f3
@@ -653,7 +687,14 @@ function run_cards!(st::State, cards, i0::Int, i1::Int)
         elseif cd.code == "ND" || cd.code == "OD" || cd.code == "DI"
             error("loop control card outside loop")
         else
-            handle_card!(st, cd)
+            try
+                handle_card!(st, cd)
+            catch err
+                err isa ErrorException && startswith(err.msg, "[card") && rethrow()
+                error("[card '$(cd.code)' f2='$(cd.f2)' f3='$(cd.f3)' f4='$(cd.f4)' " *
+                      "f5='$(cd.f5)' f6='$(cd.f6)' sec='$(st.section)'] " *
+                      sprint(showerror, err))
+            end
             i += 1
         end
     end
