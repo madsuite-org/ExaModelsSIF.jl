@@ -17,12 +17,10 @@ const QUADCONV = Ref(:half)
 # Low threshold: inlining the linear part creates one traced kernel per
 # DISTINCT (group type, L) pair, and problems like LRW1A carry ~70 distinct
 # widths of an expensive group type (hours of compilation). Beyond L=4 the
-# linear part goes through shared buffered LinChunk stages, so all widths of a
-# group type collapse into one bucket.
+# linear part rides the add_reduce lowering, so all widths of a group type
+# collapse into one bucket.
 const WIDE_LIN = 4
-const CHUNK = 16
 const ELEM_BUDGET = 40     # max element data fields traced in one kernel
-const ELEM_CHUNK = 24      # target element-field count per buffered elem stage
 
 getp(d, s::Symbol) = getproperty(d, s)
 
@@ -35,18 +33,6 @@ else
     bselect(s::Real, x::Real) = ifelse(iszero(s), zero(x), s * x)
     ExaModels.@register_bivariate(bselect, (s, x) -> zero(s), (s, x) -> s,
         (s, x) -> zero(s), (s, x) -> zero(s), (s, x) -> zero(s))
-end
-
-struct LinChunk{X}
-    x::X
-    C::Int
-end
-function (k::LinChunk)(d)
-    acc = getproperty(d, :a1) * k.x[getproperty(d, :j1)]
-    for q in 2:k.C
-        acc = acc + getproperty(d, Symbol("a", q)) * k.x[getproperty(d, Symbol("j", q))]
-    end
-    return acc
 end
 
 # ---------------------------------------------------------------- temp plans
@@ -191,24 +177,6 @@ function groupnode(x, gt::GType, ets::Vector{ElType}, plans::Vector{ElPlan},
     end
     evaltemps!(env, gt.temps)
     return feval(gt.fexpr, env) * getp(d, :sinv)
-end
-
-"Kernel for one buffered element-chunk stage: sum of the chunk's weighted
-elements. Field names are chunk-RELATIVE (c1_, c2_, ...), so chunks with the
-same element-type composition share one traced tree type and compile once."
-struct ElemChunk{X}
-    x::X
-    ets::Vector{ElType}
-    plans::Vector{ElPlan}
-    vs::Bool
-end
-function (k::ElemChunk)(d)
-    acc = nothing
-    for rel in 1:length(k.ets)
-        t = getp(d, Symbol("w", rel)) * elemnode(k.x, k.ets[rel], k.plans[rel], d, "c$(rel)_", k.vs)
-        acc = acc === nothing ? t : acc + t
-    end
-    return acc
 end
 
 function ntvec(names::Vector{Symbol}, rows::Vector{Vector{Any}})
@@ -454,7 +422,9 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing)
         end
     end
 
-    # --- emit a wide bucket: buffered partial-sum stages + one narrow kernel
+    # --- emit a wide bucket: buffer all elements per type, build each group's
+    # argument with one add_reduce (terms are data: O(1) kernel types however
+    # many elements/linear terms a group carries), finish with one tiny kernel.
     emitwide = function (sig, bucket, iscon)
         ets, epls, heads, elemrows, lins = bucket
         gt = P.gtypes[sig[2]]
@@ -462,73 +432,51 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing)
         for (slot, head) in enumerate(heads)
             insert!(head, iscon ? 2 : 1, slot)
         end
-        stages = Any[]
-        # linear stages
-        Lmax = isempty(lins) ? 0 : maximum(length.(lins))
-        if Lmax > 0
-            nlay = cld(Lmax, CHUNK)
-            ker = LinChunk(x, CHUNK)
-            cnames = vcat([Symbol("a", k) for k in 1:CHUNK], [Symbol("j", k) for k in 1:CHUNK])
-            CNT = NamedTuple{Tuple(cnames)}
-            for t in 1:nlay
-                layer = Vector{Any}[]
-                for terms in lins
-                    ch = terms[min((t-1)*CHUNK+1, length(terms)+1) : min(t*CHUNK, length(terms))]
-                    chv = Any[]
-                    for (a, j) in ch; push!(chv, a); end
-                    for _ in 1:(CHUNK - length(ch)); push!(chv, 0.0); end
-                    for (a, j) in ch; push!(chv, j); end
-                    for _ in 1:(CHUNK - length(ch)); push!(chv, 1); end
-                    push!(layer, chv)
-                end
-                data = [CNT(Tuple(r)) for r in layer]
-                local S
-                c, S = ExaModels.add_expr(c, Base.Generator(ker, data); buffered = true)
-                push!(stages, S)
-            end
-        end
-        # element stages: partition element positions into field-budget chunks
         E = length(ets)
+        terms = Pair{Int,Any}[]
         if E > 0
             fw = [1 + nelemfields(ets[e], epls[e], hasvs) for e in 1:E]
-            chunks = Vector{Int}[]
-            cur = Int[]; acc = 0
-            for e in 1:E
-                if !isempty(cur) && acc + fw[e] > ELEM_CHUNK
-                    push!(chunks, cur); cur = Int[]; acc = 0
-                end
-                push!(cur, e); acc += fw[e]
-            end
-            isempty(cur) || push!(chunks, cur)
-            # offsets of each element's fields within an elemrow
             offs = cumsum(vcat(0, fw))
-            for pos in chunks
-                names = Symbol[]
-                for (rel, e) in enumerate(pos)
-                    push!(names, Symbol("w", rel))
-                    elemfields!(names, ets[e], epls[e], "c$(rel)_", hasvs)
-                end
+            # ONE buffered stage per element TYPE, rows spanning every instance
+            # of every group (stages sit in the core's tuple type, so the stage
+            # count must not scale with the problem)
+            bytype = Dict{String,Vector{Int}}()
+            for e in 1:E
+                push!(get!(bytype, ets[e].name, Int[]), e)
+            end
+            for (tname, pos) in bytype
+                et = ets[pos[1]]; pl = epls[pos[1]]
+                names = Symbol[:w]
+                elemfields!(names, et, pl, "", hasvs)
                 data = Vector{Any}[]
-                for erow in elemrows
-                    rowv = Any[]
+                owner = Int[]
+                for (g, erow) in enumerate(elemrows)
                     for e in pos
-                        append!(rowv, erow[offs[e]+1 : offs[e]+fw[e]])
+                        push!(data, erow[offs[e]+1 : offs[e]+fw[e]])
+                        push!(owner, g)
                     end
-                    push!(data, rowv)
                 end
-                ker = ElemChunk(x, ets[pos], epls[pos], hasvs)
                 local S
-                c, S = ExaModels.add_expr(c, Base.Generator(ker, ntvec(names, data)); buffered = true)
-                push!(stages, S)
+                c, S = ExaModels.add_expr(c,
+                    Base.Generator(d -> d.w * elemnode(x, et, pl, d, "", hasvs),
+                                   ntvec(names, data)); buffered = true)
+                for (k, g) in enumerate(owner)
+                    push!(terms, g => S[k])
+                end
             end
         end
-        length(stages) > 64 && error("unsupported: wide group needs " *
-            "$(length(stages)) buffered stages (reduction-tree lowering pending)")
+        for (g, lin) in enumerate(lins)
+            for (a, j) in lin
+                push!(terms, g => a * x[j])
+            end
+        end
+        local alpha
+        c, alpha = ExaModels.add_reduce(c, m, terms)   # -b applied in the final kernel
         hnames = Symbol[]
         iscon && push!(hnames, :i)
         push!(hnames, :si); push!(hnames, :sinv); push!(hnames, :b)
         for k in 1:length(gt.gpars); push!(hnames, Symbol("g", k)); end
-        st = Tuple(stages)
+        st = (alpha,)
         noets = ElType[]; nopls = ElPlan[]
         data = ntvec(hnames, heads)
         if iscon
