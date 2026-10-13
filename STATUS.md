@@ -5,6 +5,20 @@ implemented and HOW it was verified, so verified behavior is not re-checked.
 Curate on every change: entries here state the CURRENT truth; re-verify only
 when the implementation or the ExaModels dependency changes.
 
+## Dependency (integration stack, 2026-10-13)
+
+ExaModels branch sif-integration (pushed to madsuite-org/ExaModels.jl):
+compile-time-prototypes + main (PR #330 bselect/_amul/mod) + add_reduce
+(issue #331, Egret) + PR #332 scalar-oracle Hessian fix. Worktree
+~/git/worktrees/ExaModels-sif; Sungho merges the PRs on his own schedule.
+Wide groups lower through add_reduce with ONE buffered stage per element
+TYPE spanning all instances -- stages live in the core tuple type, so the
+stage count must never scale with the problem (a per-position layout hung
+FMINSURF for 90 min; transposed it builds in 21 s). External-Fortran
+problems build via the CUTEst-backed oracle tier; params kwarg implements
+sifdecoder -param. Reference adjudications: VANDERM* noise is CUTEst's own
+(BigFloat: ours 7e-15, CUTEst 2.8e-6) -- REF_NOISE tol 1e-4.
+
 ## Dependency
 
 - ExaModels branch `compile-time-prototypes` (madsuite-org/ExaModels.jl),
