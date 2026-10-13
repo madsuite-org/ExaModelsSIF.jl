@@ -4,13 +4,13 @@ version = "0.1.0"
 authors = ["Sungho Shin <sushin@mit.edu>"]
 
 [deps]
-SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 CUTEst = "1b53aba6-35b6-5f92-a507-53c67d53f819"
 ExaModels = "1037b233-b668-4ce9-9b63-f9f681f55dd2"
 NLPModels = "a4795742-8479-5a88-8948-cc11e1c8c1a6"
+SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [sources]
-ExaModels = {path = "/home/sushin/git/worktrees/ExaModels-ctp"}
+ExaModels = {path = "/home/sushin/git/worktrees/ExaModels-sif"}
 
 [compat]
 CUTEst = "1.4.0"

@@ -173,6 +173,7 @@ mutable struct State
     rp::Dict{String,Float64}
     loopfinal::Symbol          # :last or :fortran
     firstset::Dict{String,String}  # section => first set name seen (field 2)
+    override::Dict{String,Any}     # sifdecoder -param equivalent
 end
 
 parsenum(s::AbstractString) =
@@ -232,7 +233,8 @@ function handle_iparam!(st::State, cd::Card)
         c = c == "IA" ? "I+" : c == "IS" ? "I-" : c == "IM" ? "I*" : "I/"
     end
     if c == "IE"
-        st.ip[dest] = resolveint(st, isempty(cd.f4) ? cd.f3 : cd.f4)
+        st.ip[dest] = haskey(st.override, dest) ? Int(st.override[dest]) :
+            resolveint(st, isempty(cd.f4) ? cd.f3 : cd.f4)
     elseif c == "IA"
         st.ip[dest] = st.ip[expandname(st, cd.f3)] + resolveint(st, cd.f4)
     elseif c == "IS"
@@ -266,7 +268,8 @@ function handle_rparam!(st::State, cd::Card)
         c = c == "RA" ? "R+" : c == "RS" ? "R-" : c == "RM" ? "R*" : "R/"
     end
     if c == "RE"
-        st.rp[dest] = parsenum(isempty(cd.f4) ? cd.f3 : cd.f4)
+        st.rp[dest] = haskey(st.override, dest) ? Float64(st.override[dest]) :
+            parsenum(isempty(cd.f4) ? cd.f3 : cd.f4)
     elseif c == "RA"
         st.rp[dest] = st.rp[expandname(st, cd.f3)] + parsenum(cd.f4)
     elseif c == "RS"
@@ -813,16 +816,21 @@ end
 # ------------------------------------------------------------------ driver
 
 """
-    sif_decode(path; loopfinal = :last) -> SIFProblem
+    sif_decode(path; loopfinal = :last, params = Dict()) -> SIFProblem
 
 Parse and interpret a SIF file into a fully instantiated `SIFProblem` IR.
+
+`params` overrides \$-PARAMETER-style constants (the `sifdecoder -param N=…`
+equivalent): every `IE`/`RE` definition of a listed name takes the override
+value, so later plain re-definitions cannot undo it.
 """
-function sif_decode(path::AbstractString; loopfinal::Symbol = :last)
+function sif_decode(path::AbstractString; loopfinal::Symbol = :last,
+                    params::AbstractDict = Dict{String,Any}())
     lines = readlines(path)
     datacards, elemlines, grouplines = splitparts(lines)
     empty!(_typedecls)
     st = State(SIFProblem(), "", Dict{String,Int}(), Dict{String,Float64}(),
-               loopfinal, Dict{String,String}())
+               loopfinal, Dict{String,String}(), Dict{String,Any}(params))
     run_cards!(st, datacards, 1, length(datacards))
     P = st.P
 

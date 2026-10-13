@@ -49,7 +49,10 @@ const JLFUN = Dict{Symbol,Function}(
 const _TWO_OVER_SQRTPI = 1.1283791670955126
 _derfcx(x) = 2x * erfcx(x) - _TWO_OVER_SQRTPI
 _dderfcx(x) = (2 + 4x^2) * erfcx(x) - 2x * _TWO_OVER_SQRTPI
-ExaModels.@register_univariate(erfcx, _derfcx, _dderfcx)
+# newer ExaModels registers erfcx itself via its SpecialFunctions extension
+if !hasmethod(erfcx, Tuple{ExaModels.AbstractNode})
+    ExaModels.@register_univariate(erfcx, _derfcx, _dderfcx)
+end
 
 "Exact step function on a model expression: 1 where `t REL 0` holds, else 0,
 ties handled exactly (sign(0) = 0), derivative 0 (ExaModels sign registration),
