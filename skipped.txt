@@ -1,0 +1,6 @@
+# Instances pending the ExaModels PR (bselect + _amul guarded adjoints + mod):
+# values/derivatives need branch-annihilating blends or the mod intrinsic.
+# Skip until the PR merges and compile-time-prototypes rebases on it.
+QC
+QCNEW
+ARTIF
