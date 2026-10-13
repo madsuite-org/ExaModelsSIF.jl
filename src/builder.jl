@@ -291,8 +291,16 @@ end
 Decode a SIF file and build the corresponding ExaModel. Constraint rows appear
 in SIF group declaration order (matching SIFDecode/CUTEst ordering).
 """
-function sif_model(path::AbstractString; T = Float64, backend = nothing, kwargs...)
-    P = sif_decode(path; kwargs...)
+function sif_model(path::AbstractString; T = Float64, backend = nothing,
+                   external::Symbol = :oracle, kwargs...)
+    P = try
+        sif_decode(path; kwargs...)
+    catch e
+        if e isa ExternalFortranError && external === :oracle
+            return cutest_oracle_model(path; T)
+        end
+        rethrow()
+    end
     return build_exa(P; T, backend)
 end
 
