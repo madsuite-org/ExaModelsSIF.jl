@@ -1,6 +1,7 @@
 # test/pilot.jl — M1 pilot validation: compare every decoded model against the
 # Fortran reference (CUTEst.jl) on metadata, values, and derivatives.
 using ExaModelsSIF, ExaModels, CUTEst, NLPModels
+using FileWatching.Pidfile: mkpidlock
 using Random, Printf, LinearAlgebra, SparseArrays
 
 ENV["MASTSIF"] = get(ENV, "MASTSIF", "/home/sushin/.julia/artifacts/1fa01d4c3b344b8cd32b8ef78c0abeac9bb9cce2")  # canonical: CUTEst_jll artifact
@@ -81,7 +82,15 @@ end
 function check(name; tol = name in REF_NOISE ? 1e-4 : 1e-6)
     msgs = String[]
     bad(s) = push!(msgs, s)
-    ref = CUTEstModel(name)
+    # CUTEst decodes/compiles every problem in ONE shared package-internal
+    # directory (CUTEst.libsif_path); concurrent construction collides. The
+    # lock covers construction only — evaluation is parallel-safe.
+    lk = mkpidlock("/tmp/cutest-decode.pid"; wait = true)
+    ref = try
+        CUTEstModel(name)
+    finally
+        close(lk)
+    end
     try
         local m, perm, vp
         try
