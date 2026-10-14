@@ -9,7 +9,7 @@ NLPModels = "a4795742-8479-5a88-8948-cc11e1c8c1a6"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [sources]
-ExaModels = {path = "/home/sushin/git/worktrees/ExaModels-sif"}
+ExaModels = {url = "https://github.com/madsuite-org/ExaModels.jl.git", rev = "sif-integration"}
 
 [compat]
 CUTEst = "1.4.0"

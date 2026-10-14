@@ -2,7 +2,7 @@
 
 julia_version = "1.13.1"
 manifest_format = "2.1"
-project_hash = "5fd559ddf941fe5d246b4f972bb056f7ecb84d75"
+project_hash = "1e618134b3242d2cabd1217582865502492f3f7d"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra"]
@@ -63,7 +63,9 @@ version = "0.9.5"
 
 [[deps.ExaModels]]
 deps = ["Adapt", "NLPModels", "Printf", "SolverCore"]
-path = "/home/sushin/git/worktrees/ExaModels-sif"
+git-tree-sha1 = "b86a562d4167525acaeff7fd442b8b89164c7245"
+repo-rev = "sif-integration"
+repo-url = "https://github.com/madsuite-org/ExaModels.jl.git"
 uuid = "1037b233-b668-4ce9-9b63-f9f681f55dd2"
 version = "0.12.1"
 
