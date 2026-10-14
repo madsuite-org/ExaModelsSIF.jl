@@ -14,20 +14,31 @@ function fparse(s::AbstractString)
         r"\.EQ\."i => " == ", r"\.NE\."i => " != ",
         r"\.AND\."i => " && ", r"\.OR\."i => " || ",
         r"\.NOT\."i => " !", r"\.TRUE\."i => " true ", r"\.FALSE\."i => " false ")
-    # Fortran D exponents: 1.0D0, 2.D-3, .5D+2 -> e
-    t = replace(t, r"(?<=[0-9.])[dD](?=[+-]?[0-9])" => "e")
     # Fortran allows blanks between a function name and its argument list
     t = replace(t, r"([A-Za-z][A-Za-z0-9_]*)\s+\(" => s"\1(")
     # ... and inside numeric literals ("1. 0" is 1.0)
     t = replace(t, r"([0-9]\.)\s+([0-9])" => s"\1\2")
     t = replace(t, r"([0-9])\s+(\.[0-9])" => s"\1\2")
+    # Fortran literal kinds, matching the Fortran SIFDecode generates from
+    # these expressions verbatim: a D exponent is DOUBLE PRECISION; every
+    # other real literal (bare decimal or E exponent) is DEFAULT REAL, i.e.
+    # SINGLE precision, so round it through Float32. This is measurable:
+    # READING4's hand-coded COS(2.0*3.141592653589*T) only reproduces the
+    # reference Jacobian (5.884049900701901e9, all 16 digits) with the
+    # literal rounded to Float32; the full double literal gives -6.5e14 at
+    # the same (near-singular) point. Integer literals stay Int.
+    t = replace(t,
+        r"(?<![A-Za-z0-9_.])(?:[0-9]+\.[0-9]*|\.[0-9]+|[0-9]+)(?:[eEdD][+-]?[0-9]+)?" =>
+        m -> occursin(r"[dD]", m) ? replace(m, r"[dD]" => "e") :
+             occursin(r"[.eE]", m) ? repr(Float64(Float32(parse(Float64, m)))) :
+             m)
     ex = Meta.parse(t)
     return ex
 end
 
 # Fortran intrinsic name (uppercased) -> Julia function
 const JLFUN = Dict{Symbol,Function}(
-    :EXP => exp, :LOG => log, :LOG10 => log10,
+    :EXP => exp, :LOG => x -> _flog(x), :LOG10 => log10,
     :SIN => sin, :COS => cos, :TAN => tan,
     :ASIN => asin, :ACOS => acos, :ATAN => atan, :ATAN2 => atan,
     :SINH => sinh, :COSH => cosh, :TANH => tanh,
@@ -35,7 +46,7 @@ const JLFUN = Dict{Symbol,Function}(
     :MAX => max, :MIN => min, :MOD => mod,
     :ARCTAN => atan, :ARCSIN => asin, :ARCCOS => acos,
     :DBLE => identity, :FLOAT => identity, :REAL => identity,
-    :DABS => abs, :DSQRT => sqrt, :DLOG => log, :DEXP => exp,
+    :DABS => abs, :DSQRT => x -> _fsqrt(x), :DLOG => x -> _flog(x), :DEXP => exp,
     :DSIN => sin, :DCOS => cos, :DMAX1 => max, :DMIN1 => min,
     :SIGN => (a, b) -> (a isa Number && b isa Number) ?
         abs(a) * (b < 0 ? -1.0 : 1.0) : abs(a) * (2.0 * step_ge(b) - 1.0),
@@ -54,17 +65,71 @@ if !hasmethod(erfcx, Tuple{ExaModels.AbstractNode})
     ExaModels.@register_univariate(erfcx, _derfcx, _dderfcx)
 end
 
+"Fortran-quiet log: NaN (not a throw) for a non-positive argument, on numbers
+and on model expressions (registered with ExaModels; a native log node throws
+DomainError at evaluation — LHAIFAM class)."
+# NaN only for x < 0: log(0) = -Inf in Fortran and Julia alike, and e.g.
+# DITTERT's -EXP(LOG(0)) legitimately evaluates to 0 through the -Inf
+_flog(x::Real) = x < 0 ? oftype(float(x), NaN) : log(x)
+# derivatives deliberately UNguarded (1/x is finite for x < 0): the Fortran
+# reference evaluates the hand-coded G/H formulas outside the domain too, so
+# a guarded NaN here would disagree with every reference derivative at a
+# domain-violating point (LHAIFAM: value NaN on both sides and masked, but
+# ref jac = 1/T with T = -1.000005 is finite)
+_dflog(x) = 1 / x
+_ddflog(x) = -1 / x^2
+ExaModels.@register_univariate(_flog, _dflog, _ddflog)
+
 "Fortran-quiet real power: NaN (not a throw) for negative base; derivatives
 exact on the domain including x = 0 (registered with ExaModels)."
-_fpow(x::Real, y::Real) = x < 0 ? oftype(float(x), NaN) : x^y
+# IEEE pow semantics (what Fortran X**Y compiles to): a negative base is
+# valid when the exponent VALUE is integral (HIMMELBH: X**POWER, POWER = 3.0,
+# X < 0 at the pert point), NaN otherwise; Julia ^ would throw.
+_fpow(x::Real, y::Real) =
+    x >= 0 ? x^y :
+    (isinteger(y) && abs(y) < 9.0e15) ? x^Int(y) : oftype(float(x), NaN)
 _qlog(x::Real) = x <= 0 ? oftype(float(x), NaN) : log(x)
+# derivative-position power: 0^negative is 0 here, not Inf. SIFDecode's
+# hand-written G/H lines are algebraically simplified, so the x^(y-k) factors
+# that AD would meet as Inf * 0 = NaN at x = 0 cancel on paper; the quiet
+# zero reproduces the cancelled form (DALLAS pipe |ARC|^0.85 at ARC = 0:
+# reference H is exactly 0 there). _zmul likewise kills NaN * 0 from
+# _qlog(0) in the exponent partials. Negative base stays NaN as in _fpow.
+_dpow(x::Real, y::Real) = (iszero(x) && y < 0) ? zero(float(x)) : _fpow(x, y)
 ExaModels.@register_bivariate(
     _fpow,
-    (x, y) -> y * _fpow(x, y - 1),
-    (x, y) -> _qlog(x) * _fpow(x, y),
-    (x, y) -> y * (y - 1) * _fpow(x, y - 2),
-    (x, y) -> _fpow(x, y - 1) + y * _fpow(x, y - 1) * _qlog(x),
-    (x, y) -> _qlog(x)^2 * _fpow(x, y),
+    (x, y) -> y * _dpow(x, y - 1),
+    (x, y) -> ExaModels._zmul(_qlog(x), _fpow(x, y)),
+    (x, y) -> y * (y - 1) * _dpow(x, y - 2),
+    (x, y) -> _dpow(x, y - 1) + y * ExaModels._zmul(_dpow(x, y - 1), _qlog(x)),
+    (x, y) -> ExaModels._zmul(_qlog(x)^2, _fpow(x, y)),
+)
+
+"Marker wrapping the value of an I-declared (Fortran INTEGER) temporary: `**`
+with such an exponent is INTEGER power, defined for a negative base, so it
+must not lower to the real-power `_fpow` (MANCINO class). Unwrapped by
+`fapply` in every other position."
+struct IntVal{T}
+    v::T
+end
+_unint(x) = x isa IntVal ? x.v : x
+
+"Fortran INTEGER power with a runtime (per-instance data) exponent. An
+integer-typed SIF temporary is never variable-dependent, so the partials in
+the exponent are set to zero; the base partials guard n = 0 / n = 1 so x = 0
+stays NaN-free."
+_npow(x::Real, n::Real) =
+    isfinite(n) ? x^round(Int, n) : float(x) * n   # propagate the NaN probe
+                                                   # (ExaModels NaNSource)
+_dnpow(x, n) = iszero(n) ? zero(float(x)) : n * _npow(x, n - 1)
+_ddnpow(x, n) = (iszero(n) || isone(n)) ? zero(float(x)) : n * (n - 1) * _npow(x, n - 2)
+ExaModels.@register_bivariate(
+    _npow,
+    _dnpow,
+    (x, n) -> zero(float(x)),
+    _ddnpow,
+    (x, n) -> zero(float(x)),
+    (x, n) -> zero(float(x)),
 )
 
 "Fortran-quiet square root: NaN (not a throw) for a negative numeric argument;
@@ -151,6 +216,21 @@ function feval(e, env::AbstractDict{Symbol,<:Any})
 end
 
 function fapply(op::Symbol, args)
+    if op === :^
+        b, p = _unint(args[1]), args[2]
+        if p isa IntVal
+            pv = p.v
+            (pv isa Number && isinteger(pv)) && return b^Int(pv)
+            return _npow(b, pv)
+        end
+        (p isa Number && isinteger(p)) && return b^Int(p)
+        # Fortran X**Y with real Y is only defined for X > 0; Julia ^ THROWS
+        # for a negative base. _fpow is quiet (NaN for X < 0) with exact
+        # derivatives at X = 0 (the exp/log(abs) rewrite used before had
+        # NaN derivatives at 0: S365/DITTERT/LRCOVTYPE class).
+        return _fpow(b, p)
+    end
+    args = Any[_unint(a) for a in args]
     if op === :+
         return length(args) == 1 ? args[1] : reduce(+, args)
     elseif op === :-
@@ -159,16 +239,6 @@ function fapply(op::Symbol, args)
         return reduce(*, args)
     elseif op === :/
         return args[1] / args[2]
-    elseif op === :^
-        p = args[2]
-        if p isa Number && isinteger(p)
-            return args[1]^Int(p)
-        end
-        # Fortran X**Y with real Y is only defined for X > 0; Julia ^ THROWS
-        # for a negative base. _fpow is quiet (NaN for X < 0) with exact
-        # derivatives at X = 0 (the exp/log(abs) rewrite used before had
-        # NaN derivatives at 0: S365/DITTERT/LRCOVTYPE class).
-        return _fpow(args[1], p)
     end
     if op === :(<=) || op === :(<) || op === :(>=) || op === :(>) ||
        op === :(==) || op === :(!=)

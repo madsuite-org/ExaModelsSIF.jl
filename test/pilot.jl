@@ -9,8 +9,22 @@ ENV["MASTSIF"] = get(ENV, "MASTSIF", "/home/sushin/.julia/artifacts/1fa01d4c3b34
 # problems whose mastsif hand-coded Hessian contradicts finite differences of
 # the reference gradient while ours matches (see STATUS.md)
 const HESS_REF_BUGS = Set(["GULF", "WATSON", "HIMMELBB", "HIMMELBF",
-    "MAXLIKA", "ECKERLE4LS", "HS70", "ODC"])   # fd of the reference gradient matches OUR
-    # Hessian and contradicts the reference's hand-coded H (2026-10-13)
+    "MAXLIKA", "ECKERLE4LS", "HS70", "ODC",
+    "GULFNE", "HIMMELBFNE", "WATSONNE",
+    "ROBOTARM",
+    "ECKERLE4",    # fd of the y-weighted reference Lagrangian gradient:
+    # fd-ref 0.0012 vs fd-ours 6.6e-9 (2026-10-14; same hand-coded H family
+    # as ECKERLE4LS)
+    "SCOSINE"])    # SCOSINE: ref Hessian is 0.4 from our BigFloat Hessian at
+    # the pert point while our Float64 is 1.0e-6 of it (the 1e12 group SCALE
+    # amplifies Fortran roundoff); BigFloat-adjudicated 2026-10-13
+    # ROBOTARM: at the pert point the worst entry has fd of the
+    # reference Lagrangian gradient = 18.236447894217633 = OUR entry to 12
+    # digits vs ref 18.2828 (2026-10-13)
+    # fd of the reference gradient (y-weighted
+    # Lagrangian for the NE variants) matches OUR Hessian and contradicts the
+    # reference's hand-coded H (2026-10-13; NE: fd-ref 0.085/0.07/0.0028 vs
+    # fd-ours 2.5e-6/9e-8/9e-12)
 
 # ill-conditioned problems where the Fortran reference itself carries float
 # noise: BigFloat adjudication (2026-10-13) puts OUR Float64 at 7e-15 of the
@@ -24,7 +38,40 @@ const HESS_REF_BUGS = Set(["GULF", "WATSON", "HIMMELBB", "HIMMELBF",
 const VALUE_REF_BUGS = Set(["HIMMELP1", "HIMMELP2", "HIMMELP3", "HIMMELP4",
     "HIMMELP5", "HIMMELP6"])
 
-const REF_NOISE = Set(["VANDERM1", "VANDERM2", "VANDERM3", "VANDERM4"])
+# problems whose reference G/H lines are BY CONSTRUCTION not the derivative
+# of the reference F: EQC's LOG group type clamps the VALUE to the constant
+# P*log(1e-10) when |GVAR| <= 1e-10 but hand-codes a fake slope P*1e10 in
+# that branch, so F and G are an inconsistent pair in the clamp region (fired
+# at x0 by every group without a CONSTANTS entry). Our value matches the
+# reference to 1e-13; our AD gradient is the true derivative of the clamped
+# F (zero slope). Derivative comparisons are skipped; values still strict.
+const DERIV_REF_BUGS = Set(["EQC"])
+
+# problems the REFERENCE DECODER (SIFDecode) gets wrong: LRW8A's GROUP USES
+# Z-assignments land ~300 Z-cards late in the reference -- the last 150
+# LOGREG groups get P1 = P2 = SIGMA (the following R-loop's operand; measured
+# at saturation: per-variable excess counts match the last-150 hypothesis
+# 300/300 exactly), group L(i) gets sample i+150's parameters, and the
+# R-groups' own W = SIGMA falls off the section end (reference REG term
+# missing). Modeling that in OUR decode reproduces the reference objective
+# to 5e-5 (28.0994 vs 28.1009) where the file-true value is 12.9583; a
+# 2-sample oracle with the same card pattern confirms per-iteration
+# semantics. Value/derivative comparisons are meaningless; meta/bounds
+# still strict. (2026-10-14)
+const REF_DECODE_BUGS = Set(["LRW8A"])
+
+# name => loosened tolerance where 1e-4 is still too tight (adjudicated)
+const REF_NOISE_TOL = Dict("SCOSINE" => 1e-2)   # 1e12 'SCALE' amplification:
+    # ref grad noise measured 3.8e-4 at pert while ours matches BigFloat
+
+const REF_NOISE = Set(["VANDERM1", "VANDERM2", "VANDERM3", "VANDERM4",
+    # BigFloat adjudication at the pert point (2026-10-13): our Float64
+    # matches our 256-bit BigFloat while the reference drifts --
+    # TRIGON2NE hess: ours 1.3e-14 vs ref 9.9e-6 of BigFloat;
+    # SCOSINE obj: ours 1.8e-12 vs ref 1.1e-6 (1e12 'SCALE' amplification);
+    # DALLASM/DALLASS hess: mutual noise, ours 6.8e-6/2.2e-6 and
+    # ref 9.2e-6/1.1e-6 of BigFloat
+    "TRIGON2NE", "SCOSINE", "DALLASM", "DALLASS"])
 
 const PILOT = ["ROSENBR", "HS1", "HS2", "HS3", "HS4", "HS5", "HS6", "HS7",
     "HS10", "HS11", "HS14", "HS21", "HS26", "HS28", "HS35", "HS45",
@@ -42,6 +89,33 @@ function relerr(a, b)
     any(mask) || return 0.0
     am = a[mask]; bm = b[mask]
     return norm(am - bm, Inf) / (1.0 + max(norm(am, Inf), norm(bm, Inf)))
+end
+
+"Sparse equivalent of relerr(vec(Matrix(A)), vec(Matrix(B))): max over the
+union sparsity pattern, reference-nonfinite entries masked. Avoids the dense
+materialization that OOM'd 12 concurrent ~50k-var comparisons (A0*L class:
+4 x 20 GB dense Hessians per shard)."
+function sprelerr(A::SparseMatrixCSC, B::SparseMatrixCSC)
+    d = Dict{Tuple{Int,Int},Tuple{Float64,Float64}}()
+    Ia, Ja, Va = findnz(A)
+    for k in eachindex(Va)
+        d[(Ia[k], Ja[k])] = (Va[k], 0.0)
+    end
+    Ib, Jb, Vb = findnz(B)
+    for k in eachindex(Vb)
+        key = (Ib[k], Jb[k])
+        a = get(d, key, (0.0, 0.0))[1]
+        d[key] = (a, Vb[k])
+    end
+    num = 0.0; na = 0.0; nb = 0.0
+    for (_, (a, b)) in d
+        isfinite(a) || continue
+        dd = abs(a - b)
+        dd > num && (num = dd)
+        abs(a) > na && (na = abs(a))
+        abs(b) > nb && (nb = abs(b))
+    end
+    return num / (1.0 + max(na, nb))
 end
 
 function spjac(nlp, x)
@@ -98,7 +172,8 @@ function refconnames(ref)
     return [String(strip(join(Char(UInt8(c)) for c in cname[:, i]))) for i in 1:m]
 end
 
-function check(name; tol = name in REF_NOISE ? 1e-4 : 1e-6)
+function check(name; tol = name in REF_NOISE ?
+        get(REF_NOISE_TOL, name, 1e-4) : 1e-6)
     msgs = String[]
     bad(s) = push!(msgs, s)
     # CUTEst decodes/compiles every problem in ONE shared package-internal
@@ -145,6 +220,7 @@ function check(name; tol = name in REF_NOISE ? 1e-4 : 1e-6)
                                    ref.meta.lvar, ref.meta.uvar)))
         npts = 0
         name in VALUE_REF_BUGS && return msgs   # values adjudicated: see above
+        name in REF_DECODE_BUGS && return msgs  # reference decode wrong: see above
         for (tag, xp) in pts
             xm = zeros(length(xp)); xm[vp] = xp
             fa = obj(ref, xp); fb = obj(m, xm)
@@ -156,14 +232,16 @@ function check(name; tol = name in REF_NOISE ? 1e-4 : 1e-6)
             npts += 1
             e = abs(fa - fb) / (1.0 + max(abs(fa), abs(fb)))
             e <= tol || bad("obj@$tag: ref $fa vs $fb")
+            dgate = name in DERIV_REF_BUGS   # see DERIV_REF_BUGS: ref G/H
+                                             # are not the derivative of ref F
             e = relerr(grad(ref, xp), grad(m, xm)[vp])
-            e <= tol || bad("grad@$tag (relerr $e)")
+            dgate || e <= tol || bad("grad@$tag (relerr $e)")
             if ref.meta.ncon > 0
                 e = relerr(cons(ref, xp), cons(m, xm)[perm])
                 e <= tol || bad("cons@$tag (relerr $e)")
                 Ja = spjac(ref, xp); Jb = spjac(m, xm)[perm, vp]
-                e = relerr(vec(Matrix(Ja)), vec(Matrix(Jb)))
-                e <= tol || bad("jac@$tag (relerr $e)")
+                e = sprelerr(Ja, Jb)
+                dgate || e <= tol || bad("jac@$tag (relerr $e)")
             end
             y = ref.meta.ncon > 0 ? randn(ref.meta.ncon) : Float64[]
             ym = zeros(length(y)); ym[perm] = y
@@ -171,8 +249,8 @@ function check(name; tol = name in REF_NOISE ? 1e-4 : 1e-6)
             Hbf = sphess(m, xm, ym)
             Hbp = (Hbf + transpose(Hbf))[vp, vp]   # permute full, re-canonicalize
             Hap = Ha + transpose(Ha)
-            e = relerr(vec(Matrix(Hap)), vec(Matrix(Hbp)))
-            if e > tol && name in HESS_REF_BUGS
+            e = sprelerr(Hap, Hbp)
+            if e > tol && (name in HESS_REF_BUGS || name in DERIV_REF_BUGS)
                 # mastsif ships erroneous hand-coded H lines for these; our
                 # Hessian matches finite differences of the REFERENCE gradient
                 # (adjudicated 2026-10-13: GULF fd-vs-CUTEst 7.94, fd-vs-ours

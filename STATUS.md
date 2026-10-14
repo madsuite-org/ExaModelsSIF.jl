@@ -67,6 +67,66 @@ Calibrated conventions (validated by the population above, do not re-derive):
 - DO-loop variable keeps its LAST value after the loop (loopfinal=:last).
 - CUTEst.jl non-default efirst/lfirst flags crash (xlrQh); never use them.
 
+Measured SIF semantics, 2026-10-13 (each validated by the named problem
+flipping to PASS against the Fortran reference):
+- MI/XM/ZM bound: lower -Inf AND an upper still at the default +Inf drops
+  to 0 (MATRIX2).
+- A BOUNDS 'DEFAULT' card also governs variables created AFTER the BOUNDS
+  section, e.g. by ZV in ELEMENT USES (NUFFIELD; State carries running
+  lvar_default/uvar_default used at variable creation).
+- A RANGES 'DEFAULT' card leaves equality rows untouched; G/L rows get the
+  range (DEGENQP, DEGENQPC).
+- ** with an I-declared (integer) temporary exponent is Fortran INTEGER
+  power, defined for a negative base: lowered to _npow (registered, zero
+  exponent-partials), never _fpow; integer temp assignments truncate
+  (MANCINO value to 3e-13 of ref, MANCINONE). _npow propagates non-finite
+  exponents (the ExaModels NaNSource structure probe would otherwise throw
+  in round(Int, NaN)).
+- LOG on numbers AND model expressions is quiet (_flog registered with
+  ExaModels; a native log node THROWS DomainError at evaluation): LHAIFAM
+  values. DLOG/DSQRT quiet alike.
+
+Derivative-inconsistent reference (DERIV_REF_BUGS gate): EQC's LOG group
+type clamps the VALUE to constant P*log(1e-10) for |GVAR| <= 1e-10 but
+hand-codes slope P*1e10 there, so reference F and G are an inconsistent
+pair by construction; our value matches the reference to 1e-13 and our AD
+gradient is the true derivative of the clamped F. grad/jac/hess skipped,
+values strict (2026-10-13).
+
+ExaModels sif-integration 23f3107c: subexpr hdrpass cross-term products
+guarded with _amul (raw adj * y let 0 * Inf = NaN poison stage seeds when
+a blended conditional's dead branch overflows, e.g. exp(W), W > 709 --
+hess-only NaN on wide groups, LRCOVTYPE class; 6-var repro in the commit
+message; narrow groups were already guarded in hessian.jl).
+
+Reference DECODER bug (REF_DECODE_BUGS gate): SIFDecode decodes LRW8A's
+GROUP USES wrong -- Z-card assignments land ~300 Z-cards late, so the last
+150 LOGREG groups get P1 = P2 = SIGMA (adjudicated: at M=1/M=3 the recovered
+reference group function is EXACTLY sigma*tanh(W/2), i.e. P1 = P2 = 0.01;
+at full M the per-variable saturation excess counts match the last-150
+hypothesis 300/300), group L(i) receives sample i+150's parameters, and the
+R-groups' W = SIGMA falls off the section end (the reference's REG term is
+missing). Modeling all three in OUR decode reproduces the reference
+objective to 5e-5 where the file-true value differs by a factor 2.2. A
+2-sample oracle SIF with the same card pattern (scratch/minisif/MINILRW.SIF)
+decodes identically in both and confirms per-iteration Z semantics. Likely
+worth reporting upstream to SIFDecode; LRCOVTYPE has the same pattern but
+54 trailing Z-cards against 581k groups, diluting the artifact below tol.
+
+Single-precision Fortran literals: an undecorated real literal in a
+function-section expression is DEFAULT REAL in the Fortran SIFDecode
+generates, so fparse rounds it through Float32 (D-exponent stays double,
+integers stay Int). Measured: READING4's COS(2.0*3.141592653589*T)
+reproduces the reference Jacobian entry 5.884049900701901e9 to all 16
+digits only with the Float32-rounded literal (the double literal gives
+-6.5e14 at the near-singular x0). Fixes READING4/READING5.
+
+Hessian reference bugs (hand-coded H lines contradict fd of the reference's
+own gradient while ours matches; HESS_REF_BUGS gate in pilot.jl): GULF,
+WATSON, HIMMELBB, HIMMELBF, MAXLIKA, ECKERLE4LS, HS70, ODC, and (y-weighted
+Lagrangian fd, 2026-10-13) GULFNE, HIMMELBFNE, WATSONNE, ROBOTARM (fd equals
+OUR worst entry to 12 digits, 18.236447894217633 vs ref 18.2828).
+
 Microbenchmark (this host, 002): single traced kernel compile time vs linear
 width L: 16→3.8s, 32→17.7s, 48→53s (superquadratic). Buffered chunks (C=16):
 L=96→5.8s, L=200→16s, L=400→59s; obj/grad exact, Hessian to fd-noise (1e-8).

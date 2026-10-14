@@ -86,6 +86,8 @@ function evalparamtemps(plan::ElPlan, et::ElType, e::SIFElement)
         else
             env[nm] = feval(ent, env)
         end
+        # Fortran INTEGER assignment truncates
+        nm in et.itemps && haskey(env, nm) && (env[nm] = trunc(env[nm]))
     end
     vals = Float64[]
     for nm in plan.inject
@@ -99,12 +101,12 @@ end
 "Evaluate temporaries symbolically; conditional assignments blend branches
 with exact step factors (see relstep), so variable-dependent conditionals
 reproduce SIFDecode's branch-selected values and derivatives."
-function evaltemps!(env, temps)
+function evaltemps!(env, temps, iset::Set{Symbol} = Set{Symbol}())
     for (nm, ent) in temps
         if ent isa CondAssign
             haskey(env, ent.cond) ||
                 error("conditional on undefined temporary $(ent.cond)")
-            s = tostep(env[ent.cond])
+            s = tostep(_unint(env[ent.cond]))
             v = feval(ent.ast, env)
             w = ent.sense ? s : (s isa Number ? 1.0 - s : 1.0 - s)
             if s isa Number
@@ -122,6 +124,8 @@ function evaltemps!(env, temps)
         else
             env[nm] = feval(ent, env)
         end
+        # tag integer-typed temporaries so ** lowers to integer power
+        nm in iset && !(env[nm] isa IntVal) && (env[nm] = IntVal(env[nm]))
     end
 end
 
@@ -146,11 +150,12 @@ function elemnode(x, et::ElType, plan::ElPlan, d, prefix::String, vs::Bool = fal
         env[p] = getp(d, Symbol(prefix, "p", k))
     end
     for (k, nm) in enumerate(plan.inject)
-        env[nm] = getp(d, Symbol(prefix, "t", k))
+        v = getp(d, Symbol(prefix, "t", k))
+        env[nm] = nm in et.itemps ? IntVal(v) : v
     end
-    evaltemps!(env, plan.symbolic)
+    evaltemps!(env, plan.symbolic, et.itemps)
     et.fexpr === nothing && error("element type $(et.name) has no F expression")
-    return feval(et.fexpr, env)
+    return _unint(feval(et.fexpr, env))
 end
 
 "Build the ExaModels node for one nontrivial group instance at trace time.
@@ -175,8 +180,8 @@ function groupnode(x, gt::GType, ets::Vector{ElType}, plans::Vector{ElPlan},
     for (k, p) in enumerate(gt.gpars)
         env[p] = getp(d, Symbol("g", k))
     end
-    evaltemps!(env, gt.temps)
-    return feval(gt.fexpr, env) * getp(d, :sinv)
+    evaltemps!(env, gt.temps, gt.itemps)
+    return _unint(feval(gt.fexpr, env)) * getp(d, :sinv)
 end
 
 function ntvec(names::Vector{Symbol}, rows::Vector{Vector{Any}})
