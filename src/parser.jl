@@ -195,20 +195,23 @@ end
 "Expand an array name like X(I+1) or Y(1,J) to its flat instantiated name."
 function expandname(st::State, name::AbstractString)
     occursin('(', name) || return String(name)
-    return replace(name, r"\(([^()]*)\)" => m -> begin
-        inner = m[2:end-1]
-        vals = String[]
-        for tok in split(inner, ',')
-            v = try
-                resolveint(st, strip(tok))
-            catch
-                nothing
-            end
-            v === nothing && return m   # not an index list: part of the name
-            push!(vals, string(v))
+    # SIFDecode flattening: BASE(I[,J]) -> BASE || i [ "," j ], and any text
+    # AFTER the closing paren is DROPPED (HS99EXP: group R(2)DEF is named
+    # "R2" by the reference). A paren group whose tokens do not all resolve
+    # as integer indices is part of a parameter NAME and stays verbatim.
+    mm = match(r"^([^()]*)\(([^()]*)\)(.*)$", name)
+    mm === nothing && return String(name)
+    vals = String[]
+    for tok in split(mm[2], ',')
+        v = try
+            resolveint(st, strip(tok))
+        catch
+            nothing
         end
-        join(vals, ",")
-    end)
+        v === nothing && return String(name)
+        push!(vals, string(v))
+    end
+    return mm[1] * join(vals, ",")
 end
 
 getrp(st::State, tok::AbstractString) = begin
