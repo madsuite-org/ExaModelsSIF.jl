@@ -54,11 +54,24 @@ if !hasmethod(erfcx, Tuple{ExaModels.AbstractNode})
     ExaModels.@register_univariate(erfcx, _derfcx, _dderfcx)
 end
 
+"Fortran-quiet real power: NaN (not a throw) for negative base; derivatives
+exact on the domain including x = 0 (registered with ExaModels)."
+_fpow(x::Real, y::Real) = x < 0 ? oftype(float(x), NaN) : x^y
+_qlog(x::Real) = x <= 0 ? oftype(float(x), NaN) : log(x)
+ExaModels.@register_bivariate(
+    _fpow,
+    (x, y) -> y * _fpow(x, y - 1),
+    (x, y) -> _qlog(x) * _fpow(x, y),
+    (x, y) -> y * (y - 1) * _fpow(x, y - 2),
+    (x, y) -> _fpow(x, y - 1) + y * _fpow(x, y - 1) * _qlog(x),
+    (x, y) -> _qlog(x)^2 * _fpow(x, y),
+)
+
 "Fortran-quiet square root: NaN (not a throw) for a negative numeric argument;
 on model expressions, exp(log(abs(x))/2) — exact for x > 0, finite junk for
 x < 0 so blends/ref-NaN skipping handle domain violations (STEENBR* class)."
 _fsqrt(x::Real) = x < 0 ? oftype(float(x), NaN) : sqrt(x)
-_fsqrt(x) = exp(0.5 * log(abs(x)))
+_fsqrt(x) = _fpow(x, 0.5)
 
 "Exact step function on a model expression: 1 where `t REL 0` holds, else 0,
 ties handled exactly (sign(0) = 0), derivative 0 (ExaModels sign registration),
@@ -152,13 +165,10 @@ function fapply(op::Symbol, args)
             return args[1]^Int(p)
         end
         # Fortran X**Y with real Y is only defined for X > 0; Julia ^ THROWS
-        # for negative base. Rewrite through exp/log(abs) so an inactive
-        # conditional branch with a negative base yields a finite junk value
-        # (annihilated by the blend) instead of a DomainError. Exact for X > 0.
-        if !(args[1] isa Number)
-            return exp(p * log(abs(args[1])))
-        end
-        return args[1]^p
+        # for a negative base. _fpow is quiet (NaN for X < 0) with exact
+        # derivatives at X = 0 (the exp/log(abs) rewrite used before had
+        # NaN derivatives at 0: S365/DITTERT/LRCOVTYPE class).
+        return _fpow(args[1], p)
     end
     if op === :(<=) || op === :(<) || op === :(>=) || op === :(>) ||
        op === :(==) || op === :(!=)
