@@ -11,7 +11,11 @@ ENV["MASTSIF"] = get(ENV, "MASTSIF", "/home/sushin/.julia/artifacts/1fa01d4c3b34
 const HESS_REF_BUGS = Set(["GULF", "WATSON", "HIMMELBB", "HIMMELBF",
     "MAXLIKA", "ECKERLE4LS", "HS70", "ODC",
     "GULFNE", "HIMMELBFNE", "WATSONNE",
-    "ROBOTARM"])   # ROBOTARM: at the pert point the worst entry has fd of the
+    "ROBOTARM",
+    "SCOSINE"])    # SCOSINE: ref Hessian is 0.4 from our BigFloat Hessian at
+    # the pert point while our Float64 is 1.0e-6 of it (the 1e12 group SCALE
+    # amplifies Fortran roundoff); BigFloat-adjudicated 2026-10-13
+    # ROBOTARM: at the pert point the worst entry has fd of the
     # reference Lagrangian gradient = 18.236447894217633 = OUR entry to 12
     # digits vs ref 18.2828 (2026-10-13)
     # fd of the reference gradient (y-weighted
@@ -31,7 +35,23 @@ const HESS_REF_BUGS = Set(["GULF", "WATSON", "HIMMELBB", "HIMMELBF",
 const VALUE_REF_BUGS = Set(["HIMMELP1", "HIMMELP2", "HIMMELP3", "HIMMELP4",
     "HIMMELP5", "HIMMELP6"])
 
-const REF_NOISE = Set(["VANDERM1", "VANDERM2", "VANDERM3", "VANDERM4"])
+# problems whose reference G/H lines are BY CONSTRUCTION not the derivative
+# of the reference F: EQC's LOG group type clamps the VALUE to the constant
+# P*log(1e-10) when |GVAR| <= 1e-10 but hand-codes a fake slope P*1e10 in
+# that branch, so F and G are an inconsistent pair in the clamp region (fired
+# at x0 by every group without a CONSTANTS entry). Our value matches the
+# reference to 1e-13; our AD gradient is the true derivative of the clamped
+# F (zero slope). Derivative comparisons are skipped; values still strict.
+const DERIV_REF_BUGS = Set(["EQC"])
+
+const REF_NOISE = Set(["VANDERM1", "VANDERM2", "VANDERM3", "VANDERM4",
+    # BigFloat adjudication at the pert point (2026-10-13): our Float64
+    # matches our 256-bit BigFloat while the reference drifts --
+    # TRIGON2NE hess: ours 1.3e-14 vs ref 9.9e-6 of BigFloat;
+    # SCOSINE obj: ours 1.8e-12 vs ref 1.1e-6 (1e12 'SCALE' amplification);
+    # DALLASM/DALLASS hess: mutual noise, ours 6.8e-6/2.2e-6 and
+    # ref 9.2e-6/1.1e-6 of BigFloat
+    "TRIGON2NE", "SCOSINE", "DALLASM", "DALLASS"])
 
 const PILOT = ["ROSENBR", "HS1", "HS2", "HS3", "HS4", "HS5", "HS6", "HS7",
     "HS10", "HS11", "HS14", "HS21", "HS26", "HS28", "HS35", "HS45",
@@ -163,14 +183,16 @@ function check(name; tol = name in REF_NOISE ? 1e-4 : 1e-6)
             npts += 1
             e = abs(fa - fb) / (1.0 + max(abs(fa), abs(fb)))
             e <= tol || bad("obj@$tag: ref $fa vs $fb")
+            dgate = name in DERIV_REF_BUGS   # see DERIV_REF_BUGS: ref G/H
+                                             # are not the derivative of ref F
             e = relerr(grad(ref, xp), grad(m, xm)[vp])
-            e <= tol || bad("grad@$tag (relerr $e)")
+            dgate || e <= tol || bad("grad@$tag (relerr $e)")
             if ref.meta.ncon > 0
                 e = relerr(cons(ref, xp), cons(m, xm)[perm])
                 e <= tol || bad("cons@$tag (relerr $e)")
                 Ja = spjac(ref, xp); Jb = spjac(m, xm)[perm, vp]
                 e = relerr(vec(Matrix(Ja)), vec(Matrix(Jb)))
-                e <= tol || bad("jac@$tag (relerr $e)")
+                dgate || e <= tol || bad("jac@$tag (relerr $e)")
             end
             y = ref.meta.ncon > 0 ? randn(ref.meta.ncon) : Float64[]
             ym = zeros(length(y)); ym[perm] = y
@@ -179,7 +201,7 @@ function check(name; tol = name in REF_NOISE ? 1e-4 : 1e-6)
             Hbp = (Hbf + transpose(Hbf))[vp, vp]   # permute full, re-canonicalize
             Hap = Ha + transpose(Ha)
             e = relerr(vec(Matrix(Hap)), vec(Matrix(Hbp)))
-            if e > tol && name in HESS_REF_BUGS
+            if e > tol && (name in HESS_REF_BUGS || name in DERIV_REF_BUGS)
                 # mastsif ships erroneous hand-coded H lines for these; our
                 # Hessian matches finite differences of the REFERENCE gradient
                 # (adjudicated 2026-10-13: GULF fd-vs-CUTEst 7.94, fd-vs-ours

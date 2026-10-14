@@ -86,6 +86,19 @@ flipping to PASS against the Fortran reference):
   ExaModels; a native log node THROWS DomainError at evaluation): LHAIFAM
   values. DLOG/DSQRT quiet alike.
 
+Derivative-inconsistent reference (DERIV_REF_BUGS gate): EQC's LOG group
+type clamps the VALUE to constant P*log(1e-10) for |GVAR| <= 1e-10 but
+hand-codes slope P*1e10 there, so reference F and G are an inconsistent
+pair by construction; our value matches the reference to 1e-13 and our AD
+gradient is the true derivative of the clamped F. grad/jac/hess skipped,
+values strict (2026-10-13).
+
+ExaModels sif-integration 23f3107c: subexpr hdrpass cross-term products
+guarded with _amul (raw adj * y let 0 * Inf = NaN poison stage seeds when
+a blended conditional's dead branch overflows, e.g. exp(W), W > 709 --
+hess-only NaN on wide groups, LRCOVTYPE class; 6-var repro in the commit
+message; narrow groups were already guarded in hessian.jl).
+
 Hessian reference bugs (hand-coded H lines contradict fd of the reference's
 own gradient while ours matches; HESS_REF_BUGS gate in pilot.jl): GULF,
 WATSON, HIMMELBB, HIMMELBF, MAXLIKA, ECKERLE4LS, HS70, ODC, and (y-weighted

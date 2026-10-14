@@ -58,13 +58,23 @@ end
 and on model expressions (registered with ExaModels; a native log node throws
 DomainError at evaluation — LHAIFAM class)."
 _flog(x::Real) = x <= 0 ? oftype(float(x), NaN) : log(x)
-_dflog(x) = x <= 0 ? oftype(float(x), NaN) : 1 / x
-_ddflog(x) = x <= 0 ? oftype(float(x), NaN) : -1 / x^2
+# derivatives deliberately UNguarded (1/x is finite for x < 0): the Fortran
+# reference evaluates the hand-coded G/H formulas outside the domain too, so
+# a guarded NaN here would disagree with every reference derivative at a
+# domain-violating point (LHAIFAM: value NaN on both sides and masked, but
+# ref jac = 1/T with T = -1.000005 is finite)
+_dflog(x) = 1 / x
+_ddflog(x) = -1 / x^2
 ExaModels.@register_univariate(_flog, _dflog, _ddflog)
 
 "Fortran-quiet real power: NaN (not a throw) for negative base; derivatives
 exact on the domain including x = 0 (registered with ExaModels)."
-_fpow(x::Real, y::Real) = x < 0 ? oftype(float(x), NaN) : x^y
+# IEEE pow semantics (what Fortran X**Y compiles to): a negative base is
+# valid when the exponent VALUE is integral (HIMMELBH: X**POWER, POWER = 3.0,
+# X < 0 at the pert point), NaN otherwise; Julia ^ would throw.
+_fpow(x::Real, y::Real) =
+    x >= 0 ? x^y :
+    (isinteger(y) && abs(y) < 9.0e15) ? x^Int(y) : oftype(float(x), NaN)
 _qlog(x::Real) = x <= 0 ? oftype(float(x), NaN) : log(x)
 ExaModels.@register_bivariate(
     _fpow,
