@@ -31,7 +31,7 @@ const JLFUN = Dict{Symbol,Function}(
     :SIN => sin, :COS => cos, :TAN => tan,
     :ASIN => asin, :ACOS => acos, :ATAN => atan, :ATAN2 => atan,
     :SINH => sinh, :COSH => cosh, :TANH => tanh,
-    :SQRT => sqrt, :ABS => abs,
+    :SQRT => x -> _fsqrt(x), :ABS => abs,
     :MAX => max, :MIN => min, :MOD => mod,
     :ARCTAN => atan, :ARCSIN => asin, :ARCCOS => acos,
     :DBLE => identity, :FLOAT => identity, :REAL => identity,
@@ -53,6 +53,12 @@ _dderfcx(x) = (2 + 4x^2) * erfcx(x) - 2x * _TWO_OVER_SQRTPI
 if !hasmethod(erfcx, Tuple{ExaModels.AbstractNode})
     ExaModels.@register_univariate(erfcx, _derfcx, _dderfcx)
 end
+
+"Fortran-quiet square root: NaN (not a throw) for a negative numeric argument;
+on model expressions, exp(log(abs(x))/2) — exact for x > 0, finite junk for
+x < 0 so blends/ref-NaN skipping handle domain violations (STEENBR* class)."
+_fsqrt(x::Real) = x < 0 ? oftype(float(x), NaN) : sqrt(x)
+_fsqrt(x) = exp(0.5 * log(abs(x)))
 
 "Exact step function on a model expression: 1 where `t REL 0` holds, else 0,
 ties handled exactly (sign(0) = 0), derivative 0 (ExaModels sign registration),
