@@ -1,5 +1,9 @@
 # ExaModelsSIF — implemented & verified
 
+**VALIDATION COMPLETE (2026-10-14): 1548/1548 — 1514 PASS + 34 oracle tier,
+zero failures** (runs/census_validation_final_1548.tsv; adjudicated reference
+bugs are gated in test/pilot.jl with the evidence recorded below).
+
 Purpose of this file (requested by Sungho, 2026-10-12): record what is already
 implemented and HOW it was verified, so verified behavior is not re-checked.
 Curate on every change: entries here state the CURRENT truth; re-verify only
