@@ -99,6 +99,28 @@ a blended conditional's dead branch overflows, e.g. exp(W), W > 709 --
 hess-only NaN on wide groups, LRCOVTYPE class; 6-var repro in the commit
 message; narrow groups were already guarded in hessian.jl).
 
+Reference DECODER bug (REF_DECODE_BUGS gate): SIFDecode decodes LRW8A's
+GROUP USES wrong -- Z-card assignments land ~300 Z-cards late, so the last
+150 LOGREG groups get P1 = P2 = SIGMA (adjudicated: at M=1/M=3 the recovered
+reference group function is EXACTLY sigma*tanh(W/2), i.e. P1 = P2 = 0.01;
+at full M the per-variable saturation excess counts match the last-150
+hypothesis 300/300), group L(i) receives sample i+150's parameters, and the
+R-groups' W = SIGMA falls off the section end (the reference's REG term is
+missing). Modeling all three in OUR decode reproduces the reference
+objective to 5e-5 where the file-true value differs by a factor 2.2. A
+2-sample oracle SIF with the same card pattern (scratch/minisif/MINILRW.SIF)
+decodes identically in both and confirms per-iteration Z semantics. Likely
+worth reporting upstream to SIFDecode; LRCOVTYPE has the same pattern but
+54 trailing Z-cards against 581k groups, diluting the artifact below tol.
+
+Single-precision Fortran literals: an undecorated real literal in a
+function-section expression is DEFAULT REAL in the Fortran SIFDecode
+generates, so fparse rounds it through Float32 (D-exponent stays double,
+integers stay Int). Measured: READING4's COS(2.0*3.141592653589*T)
+reproduces the reference Jacobian entry 5.884049900701901e9 to all 16
+digits only with the Float32-rounded literal (the double literal gives
+-6.5e14 at the near-singular x0). Fixes READING4/READING5.
+
 Hessian reference bugs (hand-coded H lines contradict fd of the reference's
 own gradient while ours matches; HESS_REF_BUGS gate in pilot.jl): GULF,
 WATSON, HIMMELBB, HIMMELBF, MAXLIKA, ECKERLE4LS, HS70, ODC, and (y-weighted

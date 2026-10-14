@@ -14,13 +14,24 @@ function fparse(s::AbstractString)
         r"\.EQ\."i => " == ", r"\.NE\."i => " != ",
         r"\.AND\."i => " && ", r"\.OR\."i => " || ",
         r"\.NOT\."i => " !", r"\.TRUE\."i => " true ", r"\.FALSE\."i => " false ")
-    # Fortran D exponents: 1.0D0, 2.D-3, .5D+2 -> e
-    t = replace(t, r"(?<=[0-9.])[dD](?=[+-]?[0-9])" => "e")
     # Fortran allows blanks between a function name and its argument list
     t = replace(t, r"([A-Za-z][A-Za-z0-9_]*)\s+\(" => s"\1(")
     # ... and inside numeric literals ("1. 0" is 1.0)
     t = replace(t, r"([0-9]\.)\s+([0-9])" => s"\1\2")
     t = replace(t, r"([0-9])\s+(\.[0-9])" => s"\1\2")
+    # Fortran literal kinds, matching the Fortran SIFDecode generates from
+    # these expressions verbatim: a D exponent is DOUBLE PRECISION; every
+    # other real literal (bare decimal or E exponent) is DEFAULT REAL, i.e.
+    # SINGLE precision, so round it through Float32. This is measurable:
+    # READING4's hand-coded COS(2.0*3.141592653589*T) only reproduces the
+    # reference Jacobian (5.884049900701901e9, all 16 digits) with the
+    # literal rounded to Float32; the full double literal gives -6.5e14 at
+    # the same (near-singular) point. Integer literals stay Int.
+    t = replace(t,
+        r"(?<![A-Za-z0-9_.])(?:[0-9]+\.[0-9]*|\.[0-9]+|[0-9]+)(?:[eEdD][+-]?[0-9]+)?" =>
+        m -> occursin(r"[dD]", m) ? replace(m, r"[dD]" => "e") :
+             occursin(r"[.eE]", m) ? repr(Float64(Float32(parse(Float64, m)))) :
+             m)
     ex = Meta.parse(t)
     return ex
 end
@@ -57,7 +68,9 @@ end
 "Fortran-quiet log: NaN (not a throw) for a non-positive argument, on numbers
 and on model expressions (registered with ExaModels; a native log node throws
 DomainError at evaluation — LHAIFAM class)."
-_flog(x::Real) = x <= 0 ? oftype(float(x), NaN) : log(x)
+# NaN only for x < 0: log(0) = -Inf in Fortran and Julia alike, and e.g.
+# DITTERT's -EXP(LOG(0)) legitimately evaluates to 0 through the -Inf
+_flog(x::Real) = x < 0 ? oftype(float(x), NaN) : log(x)
 # derivatives deliberately UNguarded (1/x is finite for x < 0): the Fortran
 # reference evaluates the hand-coded G/H formulas outside the domain too, so
 # a guarded NaN here would disagree with every reference derivative at a
@@ -76,13 +89,20 @@ _fpow(x::Real, y::Real) =
     x >= 0 ? x^y :
     (isinteger(y) && abs(y) < 9.0e15) ? x^Int(y) : oftype(float(x), NaN)
 _qlog(x::Real) = x <= 0 ? oftype(float(x), NaN) : log(x)
+# derivative-position power: 0^negative is 0 here, not Inf. SIFDecode's
+# hand-written G/H lines are algebraically simplified, so the x^(y-k) factors
+# that AD would meet as Inf * 0 = NaN at x = 0 cancel on paper; the quiet
+# zero reproduces the cancelled form (DALLAS pipe |ARC|^0.85 at ARC = 0:
+# reference H is exactly 0 there). _zmul likewise kills NaN * 0 from
+# _qlog(0) in the exponent partials. Negative base stays NaN as in _fpow.
+_dpow(x::Real, y::Real) = (iszero(x) && y < 0) ? zero(float(x)) : _fpow(x, y)
 ExaModels.@register_bivariate(
     _fpow,
-    (x, y) -> y * _fpow(x, y - 1),
-    (x, y) -> _qlog(x) * _fpow(x, y),
-    (x, y) -> y * (y - 1) * _fpow(x, y - 2),
-    (x, y) -> _fpow(x, y - 1) + y * _fpow(x, y - 1) * _qlog(x),
-    (x, y) -> _qlog(x)^2 * _fpow(x, y),
+    (x, y) -> y * _dpow(x, y - 1),
+    (x, y) -> ExaModels._zmul(_qlog(x), _fpow(x, y)),
+    (x, y) -> y * (y - 1) * _dpow(x, y - 2),
+    (x, y) -> _dpow(x, y - 1) + y * ExaModels._zmul(_dpow(x, y - 1), _qlog(x)),
+    (x, y) -> ExaModels._zmul(_qlog(x)^2, _fpow(x, y)),
 )
 
 "Marker wrapping the value of an I-declared (Fortran INTEGER) temporary: `**`

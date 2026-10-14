@@ -12,6 +12,9 @@ const HESS_REF_BUGS = Set(["GULF", "WATSON", "HIMMELBB", "HIMMELBF",
     "MAXLIKA", "ECKERLE4LS", "HS70", "ODC",
     "GULFNE", "HIMMELBFNE", "WATSONNE",
     "ROBOTARM",
+    "ECKERLE4",    # fd of the y-weighted reference Lagrangian gradient:
+    # fd-ref 0.0012 vs fd-ours 6.6e-9 (2026-10-14; same hand-coded H family
+    # as ECKERLE4LS)
     "SCOSINE"])    # SCOSINE: ref Hessian is 0.4 from our BigFloat Hessian at
     # the pert point while our Float64 is 1.0e-6 of it (the 1e12 group SCALE
     # amplifies Fortran roundoff); BigFloat-adjudicated 2026-10-13
@@ -43,6 +46,23 @@ const VALUE_REF_BUGS = Set(["HIMMELP1", "HIMMELP2", "HIMMELP3", "HIMMELP4",
 # reference to 1e-13; our AD gradient is the true derivative of the clamped
 # F (zero slope). Derivative comparisons are skipped; values still strict.
 const DERIV_REF_BUGS = Set(["EQC"])
+
+# problems the REFERENCE DECODER (SIFDecode) gets wrong: LRW8A's GROUP USES
+# Z-assignments land ~300 Z-cards late in the reference -- the last 150
+# LOGREG groups get P1 = P2 = SIGMA (the following R-loop's operand; measured
+# at saturation: per-variable excess counts match the last-150 hypothesis
+# 300/300 exactly), group L(i) gets sample i+150's parameters, and the
+# R-groups' own W = SIGMA falls off the section end (reference REG term
+# missing). Modeling that in OUR decode reproduces the reference objective
+# to 5e-5 (28.0994 vs 28.1009) where the file-true value is 12.9583; a
+# 2-sample oracle with the same card pattern confirms per-iteration
+# semantics. Value/derivative comparisons are meaningless; meta/bounds
+# still strict. (2026-10-14)
+const REF_DECODE_BUGS = Set(["LRW8A"])
+
+# name => loosened tolerance where 1e-4 is still too tight (adjudicated)
+const REF_NOISE_TOL = Dict("SCOSINE" => 1e-2)   # 1e12 'SCALE' amplification:
+    # ref grad noise measured 3.8e-4 at pert while ours matches BigFloat
 
 const REF_NOISE = Set(["VANDERM1", "VANDERM2", "VANDERM3", "VANDERM4",
     # BigFloat adjudication at the pert point (2026-10-13): our Float64
@@ -125,7 +145,8 @@ function refconnames(ref)
     return [String(strip(join(Char(UInt8(c)) for c in cname[:, i]))) for i in 1:m]
 end
 
-function check(name; tol = name in REF_NOISE ? 1e-4 : 1e-6)
+function check(name; tol = name in REF_NOISE ?
+        get(REF_NOISE_TOL, name, 1e-4) : 1e-6)
     msgs = String[]
     bad(s) = push!(msgs, s)
     # CUTEst decodes/compiles every problem in ONE shared package-internal
@@ -172,6 +193,7 @@ function check(name; tol = name in REF_NOISE ? 1e-4 : 1e-6)
                                    ref.meta.lvar, ref.meta.uvar)))
         npts = 0
         name in VALUE_REF_BUGS && return msgs   # values adjudicated: see above
+        name in REF_DECODE_BUGS && return msgs  # reference decode wrong: see above
         for (tag, xp) in pts
             xm = zeros(length(xp)); xm[vp] = xp
             fa = obj(ref, xp); fb = obj(m, xm)
