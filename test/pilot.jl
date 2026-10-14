@@ -91,6 +91,33 @@ function relerr(a, b)
     return norm(am - bm, Inf) / (1.0 + max(norm(am, Inf), norm(bm, Inf)))
 end
 
+"Sparse equivalent of relerr(vec(Matrix(A)), vec(Matrix(B))): max over the
+union sparsity pattern, reference-nonfinite entries masked. Avoids the dense
+materialization that OOM'd 12 concurrent ~50k-var comparisons (A0*L class:
+4 x 20 GB dense Hessians per shard)."
+function sprelerr(A::SparseMatrixCSC, B::SparseMatrixCSC)
+    d = Dict{Tuple{Int,Int},Tuple{Float64,Float64}}()
+    Ia, Ja, Va = findnz(A)
+    for k in eachindex(Va)
+        d[(Ia[k], Ja[k])] = (Va[k], 0.0)
+    end
+    Ib, Jb, Vb = findnz(B)
+    for k in eachindex(Vb)
+        key = (Ib[k], Jb[k])
+        a = get(d, key, (0.0, 0.0))[1]
+        d[key] = (a, Vb[k])
+    end
+    num = 0.0; na = 0.0; nb = 0.0
+    for (_, (a, b)) in d
+        isfinite(a) || continue
+        dd = abs(a - b)
+        dd > num && (num = dd)
+        abs(a) > na && (na = abs(a))
+        abs(b) > nb && (nb = abs(b))
+    end
+    return num / (1.0 + max(na, nb))
+end
+
 function spjac(nlp, x)
     r, c = jac_structure(nlp)
     v = jac_coord(nlp, x)
@@ -213,7 +240,7 @@ function check(name; tol = name in REF_NOISE ?
                 e = relerr(cons(ref, xp), cons(m, xm)[perm])
                 e <= tol || bad("cons@$tag (relerr $e)")
                 Ja = spjac(ref, xp); Jb = spjac(m, xm)[perm, vp]
-                e = relerr(vec(Matrix(Ja)), vec(Matrix(Jb)))
+                e = sprelerr(Ja, Jb)
                 dgate || e <= tol || bad("jac@$tag (relerr $e)")
             end
             y = ref.meta.ncon > 0 ? randn(ref.meta.ncon) : Float64[]
@@ -222,7 +249,7 @@ function check(name; tol = name in REF_NOISE ?
             Hbf = sphess(m, xm, ym)
             Hbp = (Hbf + transpose(Hbf))[vp, vp]   # permute full, re-canonicalize
             Hap = Ha + transpose(Ha)
-            e = relerr(vec(Matrix(Hap)), vec(Matrix(Hbp)))
+            e = sprelerr(Hap, Hbp)
             if e > tol && (name in HESS_REF_BUGS || name in DERIV_REF_BUGS)
                 # mastsif ships erroneous hand-coded H lines for these; our
                 # Hessian matches finite differences of the REFERENCE gradient
