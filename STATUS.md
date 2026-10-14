@@ -4,6 +4,18 @@
 zero failures** (runs/census_validation_final_1548.tsv; adjudicated reference
 bugs are gated in test/pilot.jl with the evidence recorded below).
 
+GPU smoke (test/gpusmoke.jl): 13/13 PASS on 2x GV100 vs the validated CPU
+models (incl. the add_reduce wide path, blended conditionals, registered
+quiet functions; nonfinite patterns identical; DALLASM within GPU
+sum-order noise). GPU models take DEVICE structure buffers
+(jac_structure!/hess_structure! with CuArray{Int}); host vectors reach the
+kernels and fail to compile — that is the ExaModels calling convention,
+not a bug. $-PARAMETER overrides (test/sizesweep.jl): 11/11 PASS vs
+sifdecoder -param; sifdecoder accepts only LISTED values (FMINSURF P=16
+rejected there, accepted by us). Upstream reports filed 2026-10-14:
+ralna/SIFDecode#55 (GROUP USES parameter mis-assignment, minimal
+reproducer + control) and #56 (hand-coded derivative inconsistencies).
+
 Purpose of this file (requested by Sungho, 2026-10-12): record what is already
 implemented and HOW it was verified, so verified behavior is not re-checked.
 Curate on every change: entries here state the CURRENT truth; re-verify only
