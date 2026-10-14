@@ -358,7 +358,7 @@ function handle_card!(st::State, cd::Card)
     end
     # Only the first named set applies in these sections; later sets are
     # alternative constants/bounds/starts (e.g. recorded solutions).
-    if sec in ("CONSTANTS", "RHS", "RHS'", "RANGES", "BOUNDS", "START POINT") &&
+    if sec in ("CONSTANTS", "RHS", "RHS'", "RANGES", "BOUNDS") &&
        !isempty(cd.f2)
         fs = get!(st.firstset, sec, cd.f2)
         fs == cd.f2 || return
@@ -522,6 +522,18 @@ end
 function handle_start!(st::State, cd::Card)
     code = cd.code
     P = st.P
+    # Measured SIFDecode behavior (SROSENBR: interleaved sets inside a DO loop
+    # yield x0 = [1.2, 1.0, 0, ...]): the first set applies only until the
+    # first card of a DIFFERENT set appears; after that the whole section is
+    # ignored, including later first-set cards.
+    if !isempty(cd.f2)
+        fs = get!(st.firstset, "START POINT", cd.f2)
+        if cd.f2 != fs
+            st.firstset["START POINT STOPPED"] = "yes"
+            return
+        end
+        haskey(st.firstset, "START POINT STOPPED") && return
+    end
     code in ("", "X", "V", "XV", "ZV", "Z") ||
         return   # dual-value starts and other exotics: ignore
     if code == "ZV" || code == "Z"
@@ -530,7 +542,12 @@ function handle_start!(st::State, cd::Card)
         if unquote(tok) == "DEFAULT"
             fill!(P.x0, val)
         else
-            P.x0[P.varidx[expandname(st, tok)]] = val
+            nm = expandname(st, tok)
+            if haskey(P.varidx, nm)
+                P.x0[P.varidx[nm]] = val
+            elseif !haskey(P.groups, nm)
+                error("START POINT references unknown name $nm")
+            end   # group-named rows are dual/group start values: ignored
         end
         return
     end
@@ -540,7 +557,12 @@ function handle_start!(st::State, cd::Card)
         if unquote(tok) == "DEFAULT"
             fill!(P.x0, val)
         else
-            P.x0[P.varidx[expandname(st, tok)]] = val
+            nm = expandname(st, tok)
+            if haskey(P.varidx, nm)
+                P.x0[P.varidx[nm]] = val
+            elseif !haskey(P.groups, nm)
+                error("START POINT references unknown name $nm")
+            end
         end
     end
 end
