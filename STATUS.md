@@ -21,6 +21,21 @@ implemented and HOW it was verified, so verified behavior is not re-checked.
 Curate on every change: entries here state the CURRENT truth; re-verify only
 when the implementation or the ExaModels dependency changes.
 
+## Package boundary (2026-10-14)
+
+This package is a PURE SIF front end: SIF text in, ExaModel out. It must not
+acquire a CUTEst.jl dependency, a Fortran toolchain requirement, or a package
+extension for either (Sungho 2026-10-14: "make ExaModelsSIF separate from
+ExaCUTEst" and, on a first attempt that used a weakdep extension, "nono it is
+not extension, it should be a separate repo"). `sif_decode` raises
+`ExternalFortranError` for the 34 problems with hand-coded Fortran element or
+group functions and stops there.
+
+Everything CUTEst-facing lives in ExaCUTEst.jl: the collection artifacts, the
+CUTEst.jl-compatible API, and the oracle tier that evaluates those 34 through
+the compiled Fortran. CUTEst.jl stays here only as a TEST dependency, for the
+validation harness's reference models.
+
 ## Dependency (integration stack, 2026-10-13)
 
 ExaModels branch sif-integration (pushed to madsuite-org/ExaModels.jl):
@@ -31,8 +46,9 @@ Wide groups lower through add_reduce with ONE buffered stage per element
 TYPE spanning all instances -- stages live in the core tuple type, so the
 stage count must never scale with the problem (a per-position layout hung
 FMINSURF for 90 min; transposed it builds in 21 s). External-Fortran
-problems build via the CUTEst-backed oracle tier; params kwarg implements
-sifdecoder -param. Reference adjudications: VANDERM* noise is CUTEst's own
+problems raise ExternalFortranError here and build through ExaCUTEst.jl's
+CUTEst-backed oracle tier (moved out of this package 2026-10-14); params
+kwarg implements sifdecoder -param. Reference adjudications: VANDERM* noise is CUTEst's own
 (BigFloat: ours 7e-15, CUTEst 2.8e-6) -- REF_NOISE tol 1e-4.
 
 ## Dependency
@@ -158,8 +174,14 @@ L=96→5.8s, L=200→16s, L=400→59s; obj/grad exact, Hessian to fd-noise (1e-8
 ## Environment
 
 julia --project=. always; Manifest.toml committed. Canonical SIF collection:
-the CUTEst_jll artifact (1548 problems) — exactly what the Fortran reference
-decodes. The old ~/git/pkg/cutest-sif mirror (lpoo/cutest-sif, 1149 files) is
+CUTEst.jl **v1.4.0's `sifcollection` artifact**, git-tree-sha1
+1fa01d4c3b344b8cd32b8ef78c0abeac9bb9cce2, 1548 problems — exactly what the
+Fortran reference decodes. (Corrected 2026-10-14: this was recorded as "the
+CUTEst_jll artifact", which is wrong — CUTEst_jll ships the compiled library,
+and the problem files come from CUTEst.jl's own lazy artifact. The distinction
+is load-bearing: CUTEst.jl v1.3.8's sifcollection is a DIFFERENT artifact with
+1540 problems, and shared problems differ in content, e.g. EQC and READING4.
+Verified by grepping the tree-sha1 to CUTEst v1.4.0's Artifacts.toml.) The old ~/git/pkg/cutest-sif mirror (lpoo/cutest-sif, 1149 files) is
 stale: 390 files differ, 411 problems missing, 12 removed upstream. Progress
 denominators are /1548 from round 4 on. Full-collection sweep:
 bash test/sweep_driver.sh N (restartable, shardable, resumes from

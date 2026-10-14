@@ -259,22 +259,21 @@ combinelin(g::SIFGroup) = begin
 end
 
 """
-    sif_model(path; T = Float64, backend = nothing, loopfinal = :last) -> ExaModel
+    sif_model(path; T = Float64, backend = nothing, params = Dict(),
+              loopfinal = :last) -> ExaModel
 
 Decode a SIF file and build the corresponding ExaModel. Constraint rows appear
 in SIF group declaration order (matching SIFDecode/CUTEst ordering).
+
+Throws [`ExternalFortranError`](@ref) for the 34 collection problems whose
+element or group functions are hand-coded Fortran appended to the SIF file:
+those are not expressions and cannot be decoded. Evaluating them means
+calling the compiled Fortran, which is deliberately NOT this package's
+business -- ExaCUTEst.jl handles that tier, so nothing here depends on
+CUTEst.jl or on a Fortran toolchain.
 """
-function sif_model(path::AbstractString; T = Float64, backend = nothing,
-                   external::Symbol = :oracle, kwargs...)
-    P = try
-        sif_decode(path; kwargs...)
-    catch e
-        if e isa ExternalFortranError && external === :oracle
-            return cutest_oracle_model(path; T)
-        end
-        rethrow()
-    end
-    return build_exa(P; T, backend)
+function sif_model(path::AbstractString; T = Float64, backend = nothing, kwargs...)
+    return build_exa(sif_decode(path; kwargs...); T, backend)
 end
 
 function build_exa(P::SIFProblem; T = Float64, backend = nothing)

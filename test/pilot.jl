@@ -4,7 +4,7 @@ using ExaModelsSIF, ExaModels, CUTEst, NLPModels
 using FileWatching.Pidfile: mkpidlock
 using Random, Printf, LinearAlgebra, SparseArrays
 
-ENV["MASTSIF"] = get(ENV, "MASTSIF", "/home/sushin/.julia/artifacts/1fa01d4c3b344b8cd32b8ef78c0abeac9bb9cce2")  # canonical: CUTEst_jll artifact
+ENV["MASTSIF"] = get(ENV, "MASTSIF", "/home/sushin/.julia/artifacts/1fa01d4c3b344b8cd32b8ef78c0abeac9bb9cce2")  # canonical: CUTEst.jl v1.4.0 sifcollection artifact
 
 # problems whose mastsif hand-coded Hessian contradicts finite differences of
 # the reference gradient while ours matches (see STATUS.md)

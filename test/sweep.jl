@@ -47,13 +47,11 @@ function run_sweep()
                 nvar = length(P.varnames)
             catch err
                 if err isa ExaModelsSIF.ExternalFortranError
-                    try
-                        ExaModelsSIF.cutest_oracle_model(joinpath(DIR, f))
-                        status = "OK_ORACLE"
-                    catch err2
-                        status = "ORACLE_FAIL"
-                        detail = sprint(showerror, err2)
-                    end
+                    # hand-coded Fortran: out of scope for this package since
+                    # 2026-10-14 (the oracle tier moved to ExaCUTEst.jl), so
+                    # record the class rather than trying to evaluate it
+                    status = "ORACLE_TIER"
+                    detail = sprint(showerror, err)
                 else
                     status = "DECODE_FAIL"
                     detail = sprint(showerror, err)

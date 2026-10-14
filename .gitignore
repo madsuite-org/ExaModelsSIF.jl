@@ -3,3 +3,9 @@ current*.txt
 sweep_progress*.log
 driver.out
 failed_names.txt
+val_results*.tsv
+current*.txt
+val_progress*.log
+sweep_results*.tsv
+test/Manifest.toml
+.nfs*

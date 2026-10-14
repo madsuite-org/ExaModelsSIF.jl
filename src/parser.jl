@@ -777,6 +777,22 @@ end
 
 # -------- function-part (ELEMENTS / GROUPS) parser
 
+"""
+    ExternalFortranError(tname, fn)
+
+Raised at decode when element/group type `tname` calls external Fortran
+function `fn`, i.e. hand-coded Fortran appended to the SIF file rather than a
+SIF expression. 34 problems in the standard collection are in this class; see
+ExaCUTEst.jl to evaluate them through the compiled Fortran.
+"""
+struct ExternalFortranError <: Exception
+    tname::String
+    fn::Symbol
+end
+Base.showerror(io::IO, e::ExternalFortranError) = print(io,
+    "element/group type $(e.tname) calls external Fortran function $(e.fn): " *
+    "hand-coded Fortran cannot be decoded into expressions (see ExaCUTEst.jl)")
+
 function parse_funpart(lines, isgroup::Bool)
     fdecls = Set{Symbol}()
     idecls = Set{Symbol}()
@@ -898,6 +914,11 @@ function sif_decode(path::AbstractString; loopfinal::Symbol = :last,
     gtemps_e, eblocks, fdecl_e, idecl_e = parse_funpart(elemlines, false)
     gtemps_g, gblocks, fdecl_g, idecl_g = parse_funpart(grouplines, true)
 
+    # External Fortran: a type whose body calls an F-declared function is not
+    # an expression and cannot be decoded. Raised rather than worked around,
+    # so this package never needs the compiled Fortran (ExaCUTEst.jl owns that
+    # tier; Sungho 2026-10-14, "it is not extension, it should be a separate
+    # repo").
     function checkexternal(tname, temps, fexpr, fdecls)
         isempty(fdecls) && return
         syms = fexpr === nothing ? Set{Symbol}() : union!(freesyms(fexpr), callheads(fexpr))
