@@ -27,7 +27,7 @@ end
 
 # Fortran intrinsic name (uppercased) -> Julia function
 const JLFUN = Dict{Symbol,Function}(
-    :EXP => exp, :LOG => log, :LOG10 => log10,
+    :EXP => exp, :LOG => x -> _flog(x), :LOG10 => log10,
     :SIN => sin, :COS => cos, :TAN => tan,
     :ASIN => asin, :ACOS => acos, :ATAN => atan, :ATAN2 => atan,
     :SINH => sinh, :COSH => cosh, :TANH => tanh,
@@ -35,7 +35,7 @@ const JLFUN = Dict{Symbol,Function}(
     :MAX => max, :MIN => min, :MOD => mod,
     :ARCTAN => atan, :ARCSIN => asin, :ARCCOS => acos,
     :DBLE => identity, :FLOAT => identity, :REAL => identity,
-    :DABS => abs, :DSQRT => sqrt, :DLOG => log, :DEXP => exp,
+    :DABS => abs, :DSQRT => x -> _fsqrt(x), :DLOG => x -> _flog(x), :DEXP => exp,
     :DSIN => sin, :DCOS => cos, :DMAX1 => max, :DMIN1 => min,
     :SIGN => (a, b) -> (a isa Number && b isa Number) ?
         abs(a) * (b < 0 ? -1.0 : 1.0) : abs(a) * (2.0 * step_ge(b) - 1.0),
@@ -54,6 +54,14 @@ if !hasmethod(erfcx, Tuple{ExaModels.AbstractNode})
     ExaModels.@register_univariate(erfcx, _derfcx, _dderfcx)
 end
 
+"Fortran-quiet log: NaN (not a throw) for a non-positive argument, on numbers
+and on model expressions (registered with ExaModels; a native log node throws
+DomainError at evaluation — LHAIFAM class)."
+_flog(x::Real) = x <= 0 ? oftype(float(x), NaN) : log(x)
+_dflog(x) = x <= 0 ? oftype(float(x), NaN) : 1 / x
+_ddflog(x) = x <= 0 ? oftype(float(x), NaN) : -1 / x^2
+ExaModels.@register_univariate(_flog, _dflog, _ddflog)
+
 "Fortran-quiet real power: NaN (not a throw) for negative base; derivatives
 exact on the domain including x = 0 (registered with ExaModels)."
 _fpow(x::Real, y::Real) = x < 0 ? oftype(float(x), NaN) : x^y
@@ -65,6 +73,33 @@ ExaModels.@register_bivariate(
     (x, y) -> y * (y - 1) * _fpow(x, y - 2),
     (x, y) -> _fpow(x, y - 1) + y * _fpow(x, y - 1) * _qlog(x),
     (x, y) -> _qlog(x)^2 * _fpow(x, y),
+)
+
+"Marker wrapping the value of an I-declared (Fortran INTEGER) temporary: `**`
+with such an exponent is INTEGER power, defined for a negative base, so it
+must not lower to the real-power `_fpow` (MANCINO class). Unwrapped by
+`fapply` in every other position."
+struct IntVal{T}
+    v::T
+end
+_unint(x) = x isa IntVal ? x.v : x
+
+"Fortran INTEGER power with a runtime (per-instance data) exponent. An
+integer-typed SIF temporary is never variable-dependent, so the partials in
+the exponent are set to zero; the base partials guard n = 0 / n = 1 so x = 0
+stays NaN-free."
+_npow(x::Real, n::Real) =
+    isfinite(n) ? x^round(Int, n) : float(x) * n   # propagate the NaN probe
+                                                   # (ExaModels NaNSource)
+_dnpow(x, n) = iszero(n) ? zero(float(x)) : n * _npow(x, n - 1)
+_ddnpow(x, n) = (iszero(n) || isone(n)) ? zero(float(x)) : n * (n - 1) * _npow(x, n - 2)
+ExaModels.@register_bivariate(
+    _npow,
+    _dnpow,
+    (x, n) -> zero(float(x)),
+    _ddnpow,
+    (x, n) -> zero(float(x)),
+    (x, n) -> zero(float(x)),
 )
 
 "Fortran-quiet square root: NaN (not a throw) for a negative numeric argument;
@@ -151,6 +186,21 @@ function feval(e, env::AbstractDict{Symbol,<:Any})
 end
 
 function fapply(op::Symbol, args)
+    if op === :^
+        b, p = _unint(args[1]), args[2]
+        if p isa IntVal
+            pv = p.v
+            (pv isa Number && isinteger(pv)) && return b^Int(pv)
+            return _npow(b, pv)
+        end
+        (p isa Number && isinteger(p)) && return b^Int(p)
+        # Fortran X**Y with real Y is only defined for X > 0; Julia ^ THROWS
+        # for a negative base. _fpow is quiet (NaN for X < 0) with exact
+        # derivatives at X = 0 (the exp/log(abs) rewrite used before had
+        # NaN derivatives at 0: S365/DITTERT/LRCOVTYPE class).
+        return _fpow(b, p)
+    end
+    args = Any[_unint(a) for a in args]
     if op === :+
         return length(args) == 1 ? args[1] : reduce(+, args)
     elseif op === :-
@@ -159,16 +209,6 @@ function fapply(op::Symbol, args)
         return reduce(*, args)
     elseif op === :/
         return args[1] / args[2]
-    elseif op === :^
-        p = args[2]
-        if p isa Number && isinteger(p)
-            return args[1]^Int(p)
-        end
-        # Fortran X**Y with real Y is only defined for X > 0; Julia ^ THROWS
-        # for a negative base. _fpow is quiet (NaN for X < 0) with exact
-        # derivatives at X = 0 (the exp/log(abs) rewrite used before had
-        # NaN derivatives at 0: S365/DITTERT/LRCOVTYPE class).
-        return _fpow(args[1], p)
     end
     if op === :(<=) || op === :(<) || op === :(>=) || op === :(>) ||
        op === :(==) || op === :(!=)

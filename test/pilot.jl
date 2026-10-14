@@ -9,8 +9,15 @@ ENV["MASTSIF"] = get(ENV, "MASTSIF", "/home/sushin/.julia/artifacts/1fa01d4c3b34
 # problems whose mastsif hand-coded Hessian contradicts finite differences of
 # the reference gradient while ours matches (see STATUS.md)
 const HESS_REF_BUGS = Set(["GULF", "WATSON", "HIMMELBB", "HIMMELBF",
-    "MAXLIKA", "ECKERLE4LS", "HS70", "ODC"])   # fd of the reference gradient matches OUR
-    # Hessian and contradicts the reference's hand-coded H (2026-10-13)
+    "MAXLIKA", "ECKERLE4LS", "HS70", "ODC",
+    "GULFNE", "HIMMELBFNE", "WATSONNE",
+    "ROBOTARM"])   # ROBOTARM: at the pert point the worst entry has fd of the
+    # reference Lagrangian gradient = 18.236447894217633 = OUR entry to 12
+    # digits vs ref 18.2828 (2026-10-13)
+    # fd of the reference gradient (y-weighted
+    # Lagrangian for the NE variants) matches OUR Hessian and contradicts the
+    # reference's hand-coded H (2026-10-13; NE: fd-ref 0.085/0.07/0.0028 vs
+    # fd-ours 2.5e-6/9e-8/9e-12)
 
 # ill-conditioned problems where the Fortran reference itself carries float
 # noise: BigFloat adjudication (2026-10-13) puts OUR Float64 at 7e-15 of the

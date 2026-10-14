@@ -14,6 +14,7 @@ struct ElType
     rrows::Dict{Symbol,Vector{Pair{Symbol,Float64}}}  # ivar => [(evar => coef)]
     temps::Vector{Pair{Symbol,Any}}       # ordered A-assignments (name => ast)
     fexpr::Any                            # F expression ast
+    itemps::Set{Symbol}                   # I-declared (integer) temporaries
 end
 
 struct GType
@@ -22,6 +23,7 @@ struct GType
     gpars::Vector{Symbol}
     temps::Vector{Pair{Symbol,Any}}
     fexpr::Any
+    itemps::Set{Symbol}
 end
 
 mutable struct SIFElement
@@ -174,6 +176,10 @@ mutable struct State
     loopfinal::Symbol          # :last or :fortran
     firstset::Dict{String,String}  # section => first set name seen (field 2)
     override::Dict{String,Any}     # sifdecoder -param equivalent
+    # running 'DEFAULT' bounds: a BOUNDS 'DEFAULT' card also governs variables
+    # created AFTER the BOUNDS section (ZV in ELEMENT USES: NUFFIELD class)
+    lvar_default::Float64
+    uvar_default::Float64
 end
 
 parsenum(s::AbstractString) =
@@ -312,8 +318,8 @@ function getvar!(st::State, name::AbstractString)
     P = st.P
     haskey(P.varidx, name) && return P.varidx[name]
     push!(P.varnames, String(name))
-    push!(P.lvar, 0.0)        # SIF default bounds: [0, +Inf)
-    push!(P.uvar, Inf)
+    push!(P.lvar, st.lvar_default)   # SIF default bounds [0, +Inf) unless a
+    push!(P.uvar, st.uvar_default)   # BOUNDS 'DEFAULT' card changed them
     push!(P.x0, 0.0)
     push!(P.varscale, 1.0)
     P.varidx[name] = length(P.varnames)
@@ -474,8 +480,13 @@ function handle_ranges!(st::State, cd::Card)
     for (gn, val) in ((cd.f3, cd.f4), (cd.f5, cd.f6))
         isempty(gn) && continue
         if unquote(gn) == "DEFAULT"
+            # a 'DEFAULT' range leaves equality rows untouched (measured on
+            # DEGENQP: 'DEFAULT' 2.0 keeps the E rows at lcon = ucon = 0 in
+            # the reference while every G/L row gets the range)
             v = parsenum(val)
-            for g in values(st.P.groups); g.range_ = v; end
+            for g in values(st.P.groups)
+                g.kind == 'E' || (g.range_ = v)
+            end
         else
             g = getgroup!(st, expandname(st, gn), nothing)
             g.range_ = parsenum(val)
@@ -493,17 +504,30 @@ function handle_bounds!(st::State, cd::Card)
     code = cd.code
     P = st.P
     vs = eachboundvar(st, cd.f3)
+    isdef = unquote(cd.f3) == "DEFAULT"
     if code in ("FR", "XR", "ZR")
         for v in vs; P.lvar[v] = -Inf; P.uvar[v] = Inf; end
+        isdef && (st.lvar_default = -Inf; st.uvar_default = Inf)
     elseif code in ("MI", "XM", "ZM")
-        for v in vs; P.lvar[v] = -Inf; end
+        # MPS MI rule as SIFDecode applies it: lower bound -Inf, and an upper
+        # bound still at the default +Inf drops to 0 (measured on MATRIX2:
+        # XM yields ref [-Inf, 0])
+        for v in vs
+            P.lvar[v] = -Inf
+            P.uvar[v] == Inf && (P.uvar[v] = 0.0)
+        end
+        isdef && (st.lvar_default = -Inf;
+                  st.uvar_default == Inf && (st.uvar_default = 0.0))
     elseif code in ("PL", "XP", "ZP")
         for v in vs; P.uvar[v] = Inf; end
+        isdef && (st.uvar_default = Inf)
     elseif code in ("LO", "XL", "ZL", "UP", "XU", "ZU", "FX", "XX", "ZX")
         val = startswith(code, "Z") ? getrp(st, cd.f5) : parsenum(cd.f4)
         if code in ("LO", "XL", "ZL")
             for v in vs; P.lvar[v] = val; end
+            isdef && (st.lvar_default = val)
         elseif code in ("UP", "XU", "ZU")
+            isdef && (st.uvar_default = val)
             for v in vs
                 P.uvar[v] = val
                 # MPS rule as SIFDecode applies it: a non-positive upper bound
@@ -516,6 +540,7 @@ function handle_bounds!(st::State, cd::Card)
             end
         else
             for v in vs; P.lvar[v] = val; P.uvar[v] = val; end
+            isdef && (st.lvar_default = val; st.uvar_default = val)
         end
     else
         error("unsupported BOUNDS code '$code'")
@@ -754,6 +779,7 @@ end
 
 function parse_funpart(lines, isgroup::Bool)
     fdecls = Set{Symbol}()
+    idecls = Set{Symbol}()
     temps_global = Pair{Symbol,Any}[]
     blocks = Dict{String,NamedTuple}()
     cur = nothing            # current type name
@@ -801,7 +827,10 @@ function parse_funpart(lines, isgroup::Bool)
         flushpend!()
         if section == "TEMPORARIES"
             code == "F" && push!(fdecls, Symbol(cd.f2))
-            continue  # R/I/M/L declarations carry no information we need
+            # Fortran INTEGER temporaries: ** with such an exponent is integer
+            # power, defined for a negative base (MANCINO class)
+            code == "I" && push!(idecls, Symbol(cd.f2))
+            continue  # R/M/L declarations carry no information we need
         elseif section == "GLOBALS"
             if code == "A"
                 pend_code = "A"; pend_name = Symbol(cd.f2); pend_expr = cd.expr
@@ -836,7 +865,7 @@ function parse_funpart(lines, isgroup::Bool)
         end
     end
     flushblock!()
-    return temps_global, blocks, fdecls
+    return temps_global, blocks, fdecls, idecls
 end
 
 # ------------------------------------------------------------------ driver
@@ -856,7 +885,8 @@ function sif_decode(path::AbstractString; loopfinal::Symbol = :last,
     datacards, elemlines, grouplines = splitparts(lines)
     empty!(_typedecls)
     st = State(SIFProblem(), "", Dict{String,Int}(), Dict{String,Float64}(),
-               loopfinal, Dict{String,String}(), Dict{String,Any}(params))
+               loopfinal, Dict{String,String}(), Dict{String,Any}(params),
+               0.0, Inf)
     run_cards!(st, datacards, 1, length(datacards))
     P = st.P
     # CUTEst convention: bound magnitudes >= 1e20 are infinite
@@ -865,8 +895,8 @@ function sif_decode(path::AbstractString; loopfinal::Symbol = :last,
         P.uvar[j] >= 1e20 && (P.uvar[j] = Inf)
     end
 
-    gtemps_e, eblocks, fdecl_e = parse_funpart(elemlines, false)
-    gtemps_g, gblocks, fdecl_g = parse_funpart(grouplines, true)
+    gtemps_e, eblocks, fdecl_e, idecl_e = parse_funpart(elemlines, false)
+    gtemps_g, gblocks, fdecl_g, idecl_g = parse_funpart(grouplines, true)
 
     function checkexternal(tname, temps, fexpr, fdecls)
         isempty(fdecls) && return
@@ -886,7 +916,7 @@ function sif_decode(path::AbstractString; loopfinal::Symbol = :last,
         temps = vcat(gtemps_e, blk.temps)
         checkexternal(tname, temps, blk.fexpr, fdecl_e)
         P.eltypes[tname] = ElType(tname, d.evars, d.ivars, d.epars, blk.rows,
-                                  temps, blk.fexpr)
+                                  temps, blk.fexpr, idecl_e)
     end
     for (tname, blk) in gblocks
         d = get(_typedecls, "G#" * tname, nothing)
@@ -895,7 +925,7 @@ function sif_decode(path::AbstractString; loopfinal::Symbol = :last,
         temps = vcat(gtemps_g, blk.temps)
         checkexternal(tname, temps, blk.fexpr, fdecl_g)
         P.gtypes[tname] = GType(tname, d.evars[1], d.epars,
-                                temps, blk.fexpr)
+                                temps, blk.fexpr, idecl_g)
     end
     return P
 end
