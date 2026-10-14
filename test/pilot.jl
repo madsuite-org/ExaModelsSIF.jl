@@ -34,7 +34,15 @@ const PILOT = ["ROSENBR", "HS1", "HS2", "HS3", "HS4", "HS5", "HS6", "HS7",
     "BROWNAL", "MEYER3", "DECONVC", "AVGASB", "CATENA", "GPP", "ARGLINA",
     "LUKVLE14"]
 
-relerr(a, b) = norm(a - b, Inf) / (1.0 + max(norm(a, Inf), norm(b, Inf)))
+"Relative error over entries where the REFERENCE is finite; non-finite
+reference entries are domain artifacts of the Fortran evaluation (DITTERT,
+S365 class) and are not comparable."
+function relerr(a, b)
+    mask = isfinite.(a)
+    any(mask) || return 0.0
+    am = a[mask]; bm = b[mask]
+    return norm(am - bm, Inf) / (1.0 + max(norm(am, Inf), norm(bm, Inf)))
+end
 
 function spjac(nlp, x)
     r, c = jac_structure(nlp)
@@ -154,7 +162,7 @@ function check(name; tol = name in REF_NOISE ? 1e-4 : 1e-6)
                 e = relerr(cons(ref, xp), cons(m, xm)[perm])
                 e <= tol || bad("cons@$tag (relerr $e)")
                 Ja = spjac(ref, xp); Jb = spjac(m, xm)[perm, vp]
-                e = norm(Ja - Jb, Inf) / (1.0 + max(norm(Ja, Inf), norm(Jb, Inf)))
+                e = relerr(vec(Matrix(Ja)), vec(Matrix(Jb)))
                 e <= tol || bad("jac@$tag (relerr $e)")
             end
             y = ref.meta.ncon > 0 ? randn(ref.meta.ncon) : Float64[]
@@ -163,7 +171,7 @@ function check(name; tol = name in REF_NOISE ? 1e-4 : 1e-6)
             Hbf = sphess(m, xm, ym)
             Hbp = (Hbf + transpose(Hbf))[vp, vp]   # permute full, re-canonicalize
             Hap = Ha + transpose(Ha)
-            e = norm(Hap - Hbp, Inf) / (1.0 + max(norm(Hap, Inf), norm(Hbp, Inf)))
+            e = relerr(vec(Matrix(Hap)), vec(Matrix(Hbp)))
             if e > tol && name in HESS_REF_BUGS
                 # mastsif ships erroneous hand-coded H lines for these; our
                 # Hessian matches finite differences of the REFERENCE gradient
