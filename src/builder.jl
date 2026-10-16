@@ -37,6 +37,8 @@ end
 
 # ---------------------------------------------------------------- temp plans
 
+const _NO_FNS = Dict{String,Any}()
+
 "Evaluation plan for an element type's temporaries: entries computable from
 element parameters alone are evaluated numerically per instance at build time
 (enabling parameter-only conditionals); the rest trace symbolically."
@@ -130,7 +132,8 @@ function evaltemps!(env, temps, iset::Set{Symbol} = Set{Symbol}())
 end
 
 "Build the ExaModels node for one element instance at trace time."
-function elemnode(x, et::ElType, plan::ElPlan, d, prefix::String, vs::Bool = false)
+function elemnode(x, et::ElType, plan::ElPlan, d, prefix::String, vs::Bool = false,
+                  fns::Dict{String,Any} = _NO_FNS)
     env = Dict{Symbol,Any}()
     for (k, ev) in enumerate(et.evars)
         xn = x[getp(d, Symbol(prefix, "v", k))]
@@ -153,8 +156,21 @@ function elemnode(x, et::ElType, plan::ElPlan, d, prefix::String, vs::Bool = fal
         v = getp(d, Symbol(prefix, "t", k))
         env[nm] = nm in et.itemps ? IntVal(v) : v
     end
+    # A caller-supplied Julia function takes precedence over the SIF's own F
+    # expression, and is the ONLY way to evaluate a type decoded with
+    # external = :defer (its body is opaque Fortran). It receives the env the
+    # tracer builds -- elemental and internal variables as ExaModels nodes,
+    # element parameters as data fields -- and returns the element's value.
+    # Derivatives are ExaModels' problem, so a port supplies the VALUE only,
+    # which is why it cannot repeat the hand-coded-derivative errors the
+    # Fortran G/H lines are prone to.
+    f = get(fns, et.name, nothing)
+    f === nothing || return f(env)
     evaltemps!(env, plan.symbolic, et.itemps)
-    et.fexpr === nothing && error("element type $(et.name) has no F expression")
+    et.fexpr === nothing && error(
+        "element type $(et.name) has no F expression; if the SIF was decoded " *
+        "with external = :defer, pass element_fns = Dict(\"$(et.name)\" => f) " *
+        "to build_exa")
     return _unint(feval(et.fexpr, env))
 end
 
@@ -163,7 +179,8 @@ end
 referenced via the slot field `d.si`; `L` and `ets/plans` describe the parts
 traced inline."
 function groupnode(x, gt::GType, ets::Vector{ElType}, plans::Vector{ElPlan},
-                   L::Int, d, stages = (), vs::Bool = false)
+                   L::Int, d, stages = (), vs::Bool = false,
+                   fns::Dict{String,Any} = _NO_FNS)
     acc = nothing
     addt(t) = (acc = acc === nothing ? t : acc + t)
     for S in stages
@@ -173,7 +190,7 @@ function groupnode(x, gt::GType, ets::Vector{ElType}, plans::Vector{ElPlan},
         addt(getp(d, Symbol("a", k)) * x[getp(d, Symbol("j", k))])
     end
     for (e, et) in enumerate(ets)
-        addt(getp(d, Symbol("w", e)) * elemnode(x, et, plans[e], d, "e$(e)_", vs))
+        addt(getp(d, Symbol("w", e)) * elemnode(x, et, plans[e], d, "e$(e)_", vs, fns))
     end
     addt(-getp(d, :b))
     env = Dict{Symbol,Any}(gt.gvar => acc)
@@ -276,7 +293,17 @@ function sif_model(path::AbstractString; T = Float64, backend = nothing, kwargs.
     return build_exa(sif_decode(path; kwargs...); T, backend)
 end
 
-function build_exa(P::SIFProblem; T = Float64, backend = nothing)
+function build_exa(P::SIFProblem; T = Float64, backend = nothing,
+                   element_fns::AbstractDict = _NO_FNS)
+    fns = Dict{String,Any}(String(k) => v for (k, v) in element_fns)
+    for (tname, fn) in P.external_types
+        startswith(tname, "G#") && error(
+            "group type $(tname[3:end]) calls external Fortran ($fn); only " *
+            "ELEMENT types can be supplied through element_fns")
+        haskey(fns, tname) || error(
+            "element type $tname calls external Fortran ($fn) and was decoded " *
+            "with external = :defer; supply it as element_fns[\"$tname\"]")
+    end
     nvar = length(P.varnames)
     c = ExaModels.ExaCore(T; backend)
     c, x = ExaModels.add_var(c, nvar; start = P.x0, lvar = P.lvar, uvar = P.uvar)
@@ -468,7 +495,7 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing)
                 end
                 local S
                 c, S = ExaModels.add_expr(c,
-                    Base.Generator(d -> d.w * elemnode(x, et, pl, d, "", hasvs),
+                    Base.Generator(d -> d.w * elemnode(x, et, pl, d, "", hasvs, fns),
                                    ntvec(names, data)); buffered = true)
                 for (k, g) in enumerate(owner)
                     push!(terms, g => S[k])
@@ -491,10 +518,10 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing)
         data = ntvec(hnames, heads)
         if iscon
             c, _ = ExaModels.add_con!(c, con,
-                Base.Generator(d -> d.i => groupnode(x, gt, noets, nopls, 0, d, st, hasvs), data))
+                Base.Generator(d -> d.i => groupnode(x, gt, noets, nopls, 0, d, st, hasvs, fns), data))
         else
             c, _ = ExaModels.add_obj(c,
-                Base.Generator(d -> groupnode(x, gt, noets, nopls, 0, d, st, hasvs), data))
+                Base.Generator(d -> groupnode(x, gt, noets, nopls, 0, d, st, hasvs, fns), data))
         end
     end
 
@@ -514,13 +541,13 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing)
         elemfields!(names, et, pl, "", hasvs)
         data = ntvec(names, rows)
         c, _ = ExaModels.add_con!(c, con,
-            Base.Generator(d -> d.i => d.w * elemnode(x, et, pl, d, "", hasvs), data))
+            Base.Generator(d -> d.i => d.w * elemnode(x, et, pl, d, "", hasvs, fns), data))
     end
     for (sig, (names, ets, epls, L, rows)) in cgrp
         gt = P.gtypes[sig[2]]
         data = ntvec(names, rows)
         c, _ = ExaModels.add_con!(c, con,
-            Base.Generator(d -> d.i => groupnode(x, gt, ets, epls, L, d, (), hasvs), data))
+            Base.Generator(d -> d.i => groupnode(x, gt, ets, epls, L, d, (), hasvs, fns), data))
     end
     for (sig, bucket) in cwide
         emitwide(sig, bucket, true)
@@ -538,13 +565,13 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing)
         elemfields!(names, et, pl, "", hasvs)
         data = ntvec(names, rows)
         c, _ = ExaModels.add_obj(c,
-            Base.Generator(d -> d.w * elemnode(x, et, pl, d, "", hasvs), data))
+            Base.Generator(d -> d.w * elemnode(x, et, pl, d, "", hasvs, fns), data))
     end
     for (sig, (names, ets, epls, L, rows)) in ogrp
         gt = P.gtypes[sig[2]]
         data = ntvec(names, rows)
         c, _ = ExaModels.add_obj(c,
-            Base.Generator(d -> groupnode(x, gt, ets, epls, L, d, (), hasvs), data))
+            Base.Generator(d -> groupnode(x, gt, ets, epls, L, d, (), hasvs, fns), data))
     end
     for (sig, bucket) in owide
         emitwide(sig, bucket, false)

@@ -62,6 +62,13 @@ mutable struct SIFProblem
     default_etype::Union{Nothing,String}
     default_gtype::Union{Nothing,String}
     quad::Vector{Tuple{Int,Int,Float64}}   # (i, j, coef)
+    # Element/group types whose function body calls external Fortran, recorded
+    # instead of raised when decoding with external = :defer. The DATA half of
+    # such a SIF (variables, bounds, which element uses which variables, group
+    # constants) decodes perfectly well; only the function body is opaque. A
+    # caller that can supply that function in Julia -- which is what porting
+    # these problems means -- needs the data and nothing else.
+    external_types::Dict{String,Symbol}    # type name => Fortran function
 end
 
 SIFProblem() = SIFProblem("", String[], Dict{String,Int}(),
@@ -69,7 +76,8 @@ SIFProblem() = SIFProblem("", String[], Dict{String,Int}(),
     String[], Dict{String,SIFGroup}(),
     String[], Dict{String,SIFElement}(),
     Dict{String,ElType}(), Dict{String,GType}(),
-    nothing, nothing, Tuple{Int,Int,Float64}[])
+    nothing, nothing, Tuple{Int,Int,Float64}[],
+    Dict{String,Symbol}())
 
 # ------------------------------------------------------------------ tokenizer
 
@@ -896,7 +904,10 @@ equivalent): every `IE`/`RE` definition of a listed name takes the override
 value, so later plain re-definitions cannot undo it.
 """
 function sif_decode(path::AbstractString; loopfinal::Symbol = :last,
+                    external::Symbol = :error,
                     params::AbstractDict = Dict{String,Any}())
+    external in (:error, :defer) ||
+        error("external must be :error or :defer, got :$external")
     lines = readlines(path)
     datacards, elemlines, grouplines = splitparts(lines)
     empty!(_typedecls)
@@ -919,34 +930,45 @@ function sif_decode(path::AbstractString; loopfinal::Symbol = :last,
     # so this package never needs the compiled Fortran (ExaCUTEst.jl owns that
     # tier; Sungho 2026-10-14, "it is not extension, it should be a separate
     # repo").
+    # returns the offending Fortran function name, or nothing
     function checkexternal(tname, temps, fexpr, fdecls)
-        isempty(fdecls) && return
+        isempty(fdecls) && return nothing
         syms = fexpr === nothing ? Set{Symbol}() : union!(freesyms(fexpr), callheads(fexpr))
         for (nm, ent) in temps
             union!(syms, entdeps(ent))
             union!(syms, callheads(entast(ent)))
         end
         for fn in fdecls
-            fn in syms && throw(ExternalFortranError(String(tname), fn))
+            if fn in syms
+                external === :defer && return fn
+                throw(ExternalFortranError(String(tname), fn))
+            end
         end
+        return nothing
     end
 
     for (tname, blk) in eblocks
         d = get(_typedecls, tname, nothing)
         d === nothing && error("element type $tname has a function body but no declaration")
         temps = vcat(gtemps_e, blk.temps)
-        checkexternal(tname, temps, blk.fexpr, fdecl_e)
+        fn = checkexternal(tname, temps, blk.fexpr, fdecl_e)
+        # deferred: keep the DECLARATION (variables, internals, parameters) so
+        # a caller can supply the function, but drop the opaque body
+        fn === nothing || (P.external_types[tname] = fn)
         P.eltypes[tname] = ElType(tname, d.evars, d.ivars, d.epars, blk.rows,
-                                  temps, blk.fexpr, idecl_e)
+                                  fn === nothing ? temps : Pair{Symbol,Any}[],
+                                  fn === nothing ? blk.fexpr : nothing, idecl_e)
     end
     for (tname, blk) in gblocks
         d = get(_typedecls, "G#" * tname, nothing)
         d === nothing && error("group type $tname has a function body but no declaration")
         isempty(d.evars) && error("group type $tname has no GV variable")
         temps = vcat(gtemps_g, blk.temps)
-        checkexternal(tname, temps, blk.fexpr, fdecl_g)
+        fn = checkexternal(tname, temps, blk.fexpr, fdecl_g)
+        fn === nothing || (P.external_types["G#" * tname] = fn)
         P.gtypes[tname] = GType(tname, d.evars[1], d.epars,
-                                temps, blk.fexpr, idecl_g)
+                                fn === nothing ? temps : Pair{Symbol,Any}[],
+                                fn === nothing ? blk.fexpr : nothing, idecl_g)
     end
     return P
 end
