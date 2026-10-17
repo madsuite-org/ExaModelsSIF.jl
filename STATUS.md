@@ -159,6 +159,41 @@ WATSON, HIMMELBB, HIMMELBF, MAXLIKA, ECKERLE4LS, HS70, ODC, and (y-weighted
 Lagrangian fd, 2026-10-13) GULFNE, HIMMELBFNE, WATSONNE, ROBOTARM (fd equals
 OUR worst entry to 12 digits, 18.236447894217633 vs ref 18.2828).
 
+SIFdecode writes every double into `OUTSDIF.d` at **11 significant decimal
+digits**, so a reference built from those files evaluates on truncated data
+while a decoded model evaluates on the SIF's exact values. This is the single
+most common source of a small, reproducible, structurally-clean disagreement
+with the Fortran, and it is not ours. Measured two ways rather than inferred:
+all 1110 doubles VANDANIUMS/VANDANMSLS read are exactly
+`round(exact, sigdigits = 11)`, read as text out of the decoded file; and a
+k-scan over the whole decode makes every row and every Jacobian entry
+BIT-exact at k = 11 while 9, 10, 12, 13 and 14 all fail.
+
+Its size depends on what the SIF then does with the truncated value, which is
+why the same mechanism shows up at three different magnitudes:
+
+- straight through, 1e-11 to 1e-12 (VANDANIUM's group constants and element
+  weights);
+- amplified by a cancelling subtraction, up to 9e-9 — CAR2/ORBIT2 compute
+  `TOR = TN1 - TN` from endpoints up to 1000x larger, and `C2 = 3/(2 TOR)` is
+  the largest Jacobian entry in either problem;
+- a flat relative offset on every value a group scales, 6.4e-12 — JIMACK's
+  reciprocal group SCALE arrives as `5.7870370370D-05` against
+  `1/17280 = 5.787037037037037e-5`.
+
+The `x0` a `CUTEstModel` reports comes from the same file, so it differs from
+the decode's by ~1e-12; comparisons evaluate both models at the REFERENCE's
+`x0` so that cancels.
+
+Exactly **five** problems in the 1548 carry a `1` in the fourth
+classification field, meaning the SIF supplies first derivatives only:
+BLEACHNG, CAR2, ORBIT2, SARO, SAROMM — all five external-Fortran, so no
+decoded model is affected. Their reference Hessian is absent or partial (SARO's
+is identically zero with the correct structure), and since ExaModels
+differentiates the expression rather than reading the SIF's `H` lines, ours is
+the true one. Adjudicate against a central difference of the reference's own
+Lagrangian gradient, not against its Hessian.
+
 Microbenchmark (this host, 002): single traced kernel compile time vs linear
 width L: 16→3.8s, 32→17.7s, 48→53s (superquadratic). Buffered chunks (C=16):
 L=96→5.8s, L=200→16s, L=400→59s; obj/grad exact, Hessian to fd-noise (1e-8).
