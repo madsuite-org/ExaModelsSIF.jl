@@ -201,9 +201,18 @@ function groupnode(x, gt::GType, ets::Vector{ElType}, plans::Vector{ElPlan},
     return _unint(feval(gt.fexpr, env)) * getp(d, :sinv)
 end
 
-function ntvec(names::Vector{Symbol}, rows::Vector{Vector{Any}})
+# One data row per model term, as a NamedTuple whose fields ExaModels reads
+# inside the generator. Float fields are narrowed to the model's element type
+# and integer fields left alone: the floats are the SIF's parameters and
+# coefficients, which must carry the model's precision, while the integers are
+# variable positions, which are positions in any precision. Without the
+# conversion a `T = Float32` model holds Float64 parameter tables and computes
+# its terms in Float64 before rounding -- on a GPU backend that is Float64
+# arithmetic in a Float32 kernel.
+function ntvec(::Type{T}, names::Vector{Symbol}, rows::Vector{Vector{Any}}) where {T}
     NT = NamedTuple{Tuple(names)}
-    return [NT(Tuple(r)) for r in rows]
+    conv(v) = v isa AbstractFloat ? T(v) : v
+    return [NT(Tuple(conv(v) for v in r)) for r in rows]
 end
 
 function eltypeof(P::SIFProblem, e::SIFElement)
@@ -496,7 +505,7 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing,
                 local S
                 c, S = ExaModels.add_expr(c,
                     Base.Generator(d -> d.w * elemnode(x, et, pl, d, "", hasvs, fns),
-                                   ntvec(names, data)); buffered = true)
+                                   ntvec(T, names, data)); buffered = true)
                 for (k, g) in enumerate(owner)
                     push!(terms, g => S[k])
                 end
@@ -515,7 +524,7 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing,
         for k in 1:length(gt.gpars); push!(hnames, Symbol("g", k)); end
         st = (alpha,)
         noets = ElType[]; nopls = ElPlan[]
-        data = ntvec(hnames, heads)
+        data = ntvec(T, hnames, heads)
         if iscon
             c, _ = ExaModels.add_con!(c, con,
                 Base.Generator(d -> d.i => groupnode(x, gt, noets, nopls, 0, d, st, hasvs, fns), data))
@@ -527,11 +536,11 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing,
 
     # --- emit constraint terms
     if !isempty(ccst)
-        data = ntvec([:i, :k], ccst)
+        data = ntvec(T, [:i, :k], ccst)
         c, _ = ExaModels.add_con!(c, con, Base.Generator(d -> d.i => d.k, data))
     end
     if !isempty(clin)
-        data = ntvec([:i, :j, :a], clin)
+        data = ntvec(T, [:i, :j, :a], clin)
         c, _ = ExaModels.add_con!(c, con, Base.Generator(d -> d.i => d.a * x[d.j], data))
     end
     for (tname, rows) in celem
@@ -539,13 +548,13 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing,
         pl = get!(() -> elplan(et), plans, tname)
         names = Symbol[:i, :w]
         elemfields!(names, et, pl, "", hasvs)
-        data = ntvec(names, rows)
+        data = ntvec(T, names, rows)
         c, _ = ExaModels.add_con!(c, con,
             Base.Generator(d -> d.i => d.w * elemnode(x, et, pl, d, "", hasvs, fns), data))
     end
     for (sig, (names, ets, epls, L, rows)) in cgrp
         gt = P.gtypes[sig[2]]
-        data = ntvec(names, rows)
+        data = ntvec(T, names, rows)
         c, _ = ExaModels.add_con!(c, con,
             Base.Generator(d -> d.i => groupnode(x, gt, ets, epls, L, d, (), hasvs, fns), data))
     end
@@ -555,7 +564,7 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing,
 
     # --- emit objective terms
     if !isempty(olin)
-        data = ntvec([:j, :a], olin)
+        data = ntvec(T, [:j, :a], olin)
         c, _ = ExaModels.add_obj(c, Base.Generator(d -> d.a * x[d.j], data))
     end
     for (tname, rows) in oelem
@@ -563,13 +572,13 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing,
         pl = get!(() -> elplan(et), plans, tname)
         names = Symbol[:w]
         elemfields!(names, et, pl, "", hasvs)
-        data = ntvec(names, rows)
+        data = ntvec(T, names, rows)
         c, _ = ExaModels.add_obj(c,
             Base.Generator(d -> d.w * elemnode(x, et, pl, d, "", hasvs, fns), data))
     end
     for (sig, (names, ets, epls, L, rows)) in ogrp
         gt = P.gtypes[sig[2]]
-        data = ntvec(names, rows)
+        data = ntvec(T, names, rows)
         c, _ = ExaModels.add_obj(c,
             Base.Generator(d -> groupnode(x, gt, ets, epls, L, d, (), hasvs, fns), data))
     end
@@ -579,7 +588,7 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing,
     if !isempty(P.quad)
         qrows = Vector{Any}[Any[i, j,
             VS[i] * VS[j] * ((QUADCONV[] === :half && i == j) ? 0.5 * q : q)] for (i, j, q) in P.quad]
-        data = ntvec([:i, :j, :q], qrows)
+        data = ntvec(T, [:i, :j, :q], qrows)
         c, _ = ExaModels.add_obj(c, Base.Generator(d -> d.q * x[d.i] * x[d.j], data))
     end
     if objconst != 0.0
