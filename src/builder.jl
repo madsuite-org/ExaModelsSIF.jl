@@ -285,11 +285,34 @@ combinelin(g::SIFGroup) = begin
 end
 
 """
-    sif_model(path; T = Float64, backend = nothing, params = Dict(),
+    prodflag(prod, c::ExaModels.ExaCore) -> Bool
+
+Resolve the `prod` setting of a model builder for the core `c`.
+
+`prod = true` asks `ExaModels.ExaModel` for the product helper that the
+KernelAbstractions `hprod!` / `jprod_nln!` / `jtprod_nln!` overrides dispatch
+on. Without that helper those callbacks fall back to the generic methods,
+which index the model's arrays elementwise and so fail on a device under
+`CUDA.allowscalar(false)`. It is free when `backend === nothing`, where
+`ExaModels.build_extension` ignores it.
+
+ExaModels rejects `prod = true` for a core carrying buffered subexpressions,
+which wide nontrivial groups emit (see `WIDE_LIN`), so `:auto` requests the
+helper exactly where the core admits one. A literal `true` or `false` is
+passed through unchanged, so `prod = true` on such a core raises rather than
+quietly building a model whose `hprod` does not work on a device.
+"""
+prodflag(prod, c::ExaModels.ExaCore) = prod === :auto ? isempty(c.subexprs) : prod
+
+"""
+    sif_model(path; T = Float64, backend = nothing, prod = :auto, params = Dict(),
               loopfinal = :last) -> ExaModel
 
 Decode a SIF file and build the corresponding ExaModel. Constraint rows appear
 in SIF group declaration order (matching SIFDecode/CUTEst ordering).
+
+`prod` is resolved by [`prodflag`](@ref) and forwarded to
+`ExaModels.ExaModel`.
 
 Throws [`ExternalFortranError`](@ref) for the 34 collection problems whose
 element or group functions are hand-coded Fortran appended to the SIF file:
@@ -298,11 +321,21 @@ calling the compiled Fortran, which is deliberately NOT this package's
 business -- ExaCUTEst.jl handles that tier, so nothing here depends on
 CUTEst.jl or on a Fortran toolchain.
 """
-function sif_model(path::AbstractString; T = Float64, backend = nothing, kwargs...)
-    return build_exa(sif_decode(path; kwargs...); T, backend)
+function sif_model(path::AbstractString; T = Float64, backend = nothing,
+                   prod = :auto, kwargs...)
+    return build_exa(sif_decode(path; kwargs...); T, backend, prod)
 end
 
-function build_exa(P::SIFProblem; T = Float64, backend = nothing,
+"""
+    build_exa(P::SIFProblem; T = Float64, backend = nothing, prod = :auto,
+              element_fns = Dict()) -> ExaModel
+
+Build an ExaModel from a decoded problem.
+
+`prod` is resolved by [`prodflag`](@ref) and forwarded to
+`ExaModels.ExaModel`.
+"""
+function build_exa(P::SIFProblem; T = Float64, backend = nothing, prod = :auto,
                    element_fns::AbstractDict = _NO_FNS)
     fns = Dict{String,Any}(String(k) => v for (k, v) in element_fns)
     for (tname, fn) in P.external_types
@@ -595,5 +628,5 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing,
         c, _ = ExaModels.add_obj(c, Base.Generator(d -> d.k, [(k = T(objconst),)]))
     end
 
-    return ExaModels.ExaModel(c)
+    return ExaModels.ExaModel(c; prod = prodflag(prod, c))
 end
