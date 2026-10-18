@@ -138,12 +138,20 @@ x < 0 so blends/ref-NaN skipping handle domain violations (STEENBR* class)."
 _fsqrt(x::Real) = x < 0 ? oftype(float(x), NaN) : sqrt(x)
 _fsqrt(x) = _fpow(x, 0.5)
 
-"Exact step function on a model expression: 1 where `t REL 0` holds, else 0,
+"""
+Exact step function on a model expression: 1 where `t REL 0` holds, else 0,
 ties handled exactly (sign(0) = 0), derivative 0 (ExaModels sign registration),
-so blended conditionals reproduce branch-selected values AND derivatives."
+so blended conditionals reproduce branch-selected values AND derivatives.
+
+Each form references `t` exactly once. ExaModels sizes a kernel's Hessian slot
+tuple from the expression TYPE, counting one slot per pair of variable leaves
+whether or not the pair's second derivative is identically zero, so a second
+reference to `t` squares that tuple -- and the tuple is passed by value in the
+kernel's argument list, against a 32 KB parameter limit on the device.
+"""
 step_ge(t) = (sign(sign(t) + 0.5) + 1) * 0.5          # t >= 0
 step_gt(t) = (sign(sign(t) - 0.5) + 1) * 0.5          # t >  0
-step_eq(t) = step_ge(t) * step_ge(-t)                  # t == 0
+step_eq(t) = 1.0 - abs2(sign(t))                       # t == 0
 isnodeval(x) = !(x isa Number) && !(x isa Bool)
 
 "Logical value in symbolic form: a step expression in [0, 1]."
@@ -206,13 +214,40 @@ function feval(e, env::AbstractDict{Symbol,<:Any})
             a = feval(e.args[1], env); b = feval(e.args[2], env)
             (a isa Bool && b isa Bool) && return a || b
             sa = tostep(a); sb = tostep(b)
-            return sa + sb - sa * sb
+            # max, not sa + sb - sa*sb: the step factors are exactly 0.0 or
+            # 1.0, so max is the same indicator while referencing each operand
+            # once, and each extra reference multiplies the kernel's Hessian
+            # slot tuple (see step_ge).
+            return max(sa, sb)
         else
             error("unsupported expression head $(e.head) in SIF expression")
         end
     else
         error("unsupported token $e in SIF expression")
     end
+end
+
+# A run of equal operands in a product becomes `abs2`, which references the
+# operand once. ExaModels sizes a kernel's derivative slot tuples from the
+# expression TYPE, counting a Hessian slot per pair of variable-leaf
+# OCCURRENCES rather than per pair of distinct variables, and passes those
+# tuples by value in the kernel's argument list against a 32 KB device
+# parameter limit. A SIF element like `D = S + V*V` therefore pays twice over
+# for one variable, and `P3 * PS * PS` three times over for the whole of `PS`.
+#
+# Collapsing a run reassociates the product when a numeric factor precedes it
+# (`2*V*V` becomes `2*abs2(V)`), so the result can differ from the strictly
+# left-associated product in the last bit.
+function _fprod(args)
+    out = Any[]
+    for a in args
+        if !isempty(out) && !(a isa Number) && out[end] === a
+            out[end] = abs2(a)
+        else
+            push!(out, a)
+        end
+    end
+    return reduce(*, out)
 end
 
 function fapply(op::Symbol, args)
@@ -236,7 +271,7 @@ function fapply(op::Symbol, args)
     elseif op === :-
         return length(args) == 1 ? -args[1] : args[1] - args[2]
     elseif op === :*
-        return reduce(*, args)
+        return _fprod(args)
     elseif op === :/
         return args[1] / args[2]
     end

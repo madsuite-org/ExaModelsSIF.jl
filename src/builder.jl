@@ -100,6 +100,18 @@ function evalparamtemps(plan::ElPlan, et::ElType, e::SIFElement)
     return vals
 end
 
+# A blend term with an identically-zero factor is dropped rather than traced.
+# `bselect(w, 0)` is zero for every `w`, and with it goes the reference to the
+# condition's argument that `w` carries: ExaModels sizes a kernel's Hessian
+# slot tuple from the expression type, one slot per pair of variable leaves
+# regardless of whether the pair's second derivative is identically zero, so
+# each surviving reference multiplies that tuple's length -- and the tuple
+# travels by value in the kernel's argument list, against a 32 KB device
+# parameter limit.
+_iszeroval(v) = v isa Number && iszero(v)
+_bsel(w, v) = _iszeroval(v) ? 0.0 : bselect(w, v)
+_addblend(a, b) = _iszeroval(a) ? b : (_iszeroval(b) ? a : a + b)
+
 "Evaluate temporaries symbolically; conditional assignments blend branches
 with exact step factors (see relstep), so variable-dependent conditionals
 reproduce SIFDecode's branch-selected values and derivatives."
@@ -117,11 +129,8 @@ function evaltemps!(env, temps, iset::Set{Symbol} = Set{Symbol}())
                     error("non-binary numeric condition for $(ent.cond)")
             else
                 prev = get(env, nm, nothing)
-                if prev === nothing
-                    env[nm] = bselect(w, v)
-                else
-                    env[nm] = bselect(w, v) + bselect(1.0 - w, prev)
-                end
+                env[nm] = prev === nothing ? _bsel(w, v) :
+                          _addblend(_bsel(w, v), _bsel(1.0 - w, prev))
             end
         else
             env[nm] = feval(ent, env)
