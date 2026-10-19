@@ -34,7 +34,20 @@ jobs:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-buildpkg@v1
+        if: matrix.version != 'lts'
       - uses: julia-actions/julia-runtest@v1
+        if: matrix.version != 'lts'
+      # Julia 1.10 does not read [sources], and the tracked Manifest comes
+      # from a newer Julia, so the LTS job installs as the README describes.
+      - name: Run tests (Julia LTS)
+        if: matrix.version == 'lts'
+        run: |
+          julia --color=yes -e '
+            using Pkg
+            Pkg.activate(; temp = true)
+            Pkg.add(url = "https://github.com/madsuite-org/ExaModels.jl", rev = "sif-integration")
+            Pkg.develop(path = ".")
+            Pkg.test("ExaModelsSIF")'
       - uses: julia-actions/julia-processcoverage@v1
         if: matrix.version == '1'
       # Coverage is informational (see codecov.yml): an upload failure does
