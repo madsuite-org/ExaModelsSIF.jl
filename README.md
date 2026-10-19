@@ -1,5 +1,9 @@
 # ExaModelsSIF.jl
 
+[![CI](https://github.com/madsuite-org/ExaModelsSIF.jl/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/madsuite-org/ExaModelsSIF.jl/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/madsuite-org/ExaModelsSIF.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/madsuite-org/ExaModelsSIF.jl)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 ExaModelsSIF decodes optimization problems written in SIF, the Standard Input
 Format of the [CUTEst](https://github.com/ralna/CUTEst) test set, directly into
 [ExaModels](https://github.com/exanauts/ExaModels.jl) models. The resulting
@@ -43,14 +47,22 @@ substituted as linear combinations, and the `QUADRATIC` section is emitted as
 Hessian terms. Groups too wide to trace as one kernel are lowered through
 buffered subexpressions and a reduction.
 
-The decoder is implemented from the published
-[SIF reference](https://www.numerical.rl.ac.uk/lancelot/sif/).
+The decoder is implemented from the SIF reference report [3], which
+SIFDecode distributes.
+
+[S2MPJ](https://github.com/GrattonToint/S2MPJ) [5] also translates the SIF
+collection into native code, producing problem files for Matlab, Python and
+Julia that evaluate values and derivatives without Fortran. ExaModelsSIF
+targets a different form: it emits ExaModels' SIMD representation [6, 7], in
+which instances of one element or group type share one compiled kernel, so a
+problem evaluates on a GPU and derivatives come from ExaModels' automatic
+differentiation.
 
 ## Coverage and validation
 
-The CUTEst collection distributed with CUTEst.jl v1.4.0 has 1548 problems.
-1514 of them decode and build, and each is compared against the compiled
-Fortran through CUTEst.jl: objective, gradient, constraints, Jacobian and
+The CUTEst collection distributed with CUTEst.jl [8] v1.4.0 has 1548
+problems. 1514 of them decode and build, and each is compared against the
+compiled Fortran [1] through CUTEst.jl: objective, gradient, constraints, Jacobian and
 Lagrangian Hessian at the starting point and at a perturbed point, together
 with sizes, starting point and bounds. All 1514 agree.
 
@@ -83,4 +95,28 @@ Pkg.add(url = "https://github.com/madsuite-org/ExaModels.jl", rev = "sif-integra
 Pkg.add(url = "https://github.com/madsuite-org/ExaModelsSIF.jl")
 ```
 
-No CUTEst Fortran or C source is included or distributed.
+## References
+
+1. N. I. M. Gould, D. Orban, Ph. L. Toint, *CUTEst: a Constrained and Unconstrained Testing Environment with safe threads for mathematical optimization*, Computational Optimization and Applications 60(3), 545-557, 2015. [doi:10.1007/s10589-014-9687-3](https://doi.org/10.1007/s10589-014-9687-3)
+2. A. R. Conn, N. I. M. Gould, Ph. L. Toint, *LANCELOT: A Fortran Package for Large-Scale Nonlinear Optimization (Release A)*, Springer Series in Computational Mathematics, Springer, 1992. [doi:10.1007/978-3-662-12211-2](https://doi.org/10.1007/978-3-662-12211-2)
+3. A. R. Conn, N. I. M. Gould, D. Orban, Ph. L. Toint, *The SIF Reference Report (revised version)*, distributed with SIFDecode. [sif.pdf](https://github.com/ralna/SIFDecode/blob/master/doc/pdf/sif.pdf)
+4. SIFDecode, the SIF decoder of CUTEst. [github.com/ralna/SIFDecode](https://github.com/ralna/SIFDecode)
+5. S. Gratton, Ph. L. Toint, *S2MPJ and CUTEst optimization problems for Matlab, Python and Julia*, Optimization Methods and Software 40(4), 871-903, 2025. [doi:10.1080/10556788.2025.2490640](https://doi.org/10.1080/10556788.2025.2490640), [arXiv:2407.07812](https://arxiv.org/abs/2407.07812)
+6. S. Shin, M. Schanen, F. Pacaud, A. Montoison, M. Anitescu, *ExaModels.jl: An Algebraic Modeling System for Nonlinear Programming on GPUs*, 2026. [arXiv:2608.16265](https://arxiv.org/abs/2608.16265)
+7. S. Shin, M. Anitescu, F. Pacaud, *Accelerating optimal power flow with GPUs: SIMD abstraction of nonlinear programs and condensed-space interior-point methods*, Electric Power Systems Research 236, 110651, 2024. [doi:10.1016/j.epsr.2024.110651](https://doi.org/10.1016/j.epsr.2024.110651)
+8. A. Montoison, D. Orban, A. Soares Siqueira, and contributors, *CUTEst.jl: Julia's CUTEst interface*. [doi:10.5281/zenodo.1188851](https://doi.org/10.5281/zenodo.1188851)
+9. D. Orban, A. Soares Siqueira, and contributors, *NLPModels.jl: Data Structures for Optimization Models*. [doi:10.5281/zenodo.2558627](https://doi.org/10.5281/zenodo.2558627)
+
+## Acknowledgements
+
+The SIF format comes from LANCELOT [2], and the problems are those of the
+CUTEst collection [1], maintained by the CUTEst developers. SIFDecode [4],
+compiled and called through CUTEst.jl [8], is the reference every model here
+is validated against. Models implement the NLPModels.jl [9] interface through
+ExaModels.
+
+## License
+
+MIT; see [LICENSE](LICENSE). No CUTEst Fortran or C source is included or
+distributed. The SIF problem files are distributed by the CUTEst project under
+their own terms.

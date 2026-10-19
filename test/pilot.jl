@@ -1,33 +1,35 @@
-# test/pilot.jl — M1 pilot validation: compare every decoded model against the
-# Fortran reference (CUTEst.jl) on metadata, values, and derivatives.
+# test/pilot.jl — compare decoded models against the Fortran reference
+# (CUTEst.jl) on metadata, values, and derivatives.
 using ExaModelsSIF, ExaModels, CUTEst, NLPModels
 using FileWatching.Pidfile: mkpidlock
 using Random, Printf, LinearAlgebra, SparseArrays
 
-ENV["MASTSIF"] = get(ENV, "MASTSIF", "/home/sushin/.julia/artifacts/1fa01d4c3b344b8cd32b8ef78c0abeac9bb9cce2")  # canonical: CUTEst.jl v1.4.0 sifcollection artifact
+# Loading CUTEst.jl sets ENV["MASTSIF"], unless the user already has, to the
+# collection CUTEst.jl ships (its `sifcollection` artifact), so the decoder and
+# the reference read the same files.
 
 # problems whose mastsif hand-coded Hessian contradicts finite differences of
-# the reference gradient while ours matches (see STATUS.md)
+# the reference gradient while ours matches
 const HESS_REF_BUGS = Set(["GULF", "WATSON", "HIMMELBB", "HIMMELBF",
     "MAXLIKA", "ECKERLE4LS", "HS70", "ODC",
     "GULFNE", "HIMMELBFNE", "WATSONNE",
     "ROBOTARM",
     "ECKERLE4",    # fd of the y-weighted reference Lagrangian gradient:
-    # fd-ref 0.0012 vs fd-ours 6.6e-9 (2026-10-14; same hand-coded H family
-    # as ECKERLE4LS)
+    # fd-ref 0.0012 vs fd-ours 6.6e-9; same hand-coded H family
+    # as ECKERLE4LS
     "SCOSINE"])    # SCOSINE: ref Hessian is 0.4 from our BigFloat Hessian at
     # the pert point while our Float64 is 1.0e-6 of it (the 1e12 group SCALE
-    # amplifies Fortran roundoff); BigFloat-adjudicated 2026-10-13
+    # amplifies Fortran roundoff); BigFloat-adjudicated
     # ROBOTARM: at the pert point the worst entry has fd of the
     # reference Lagrangian gradient = 18.236447894217633 = OUR entry to 12
-    # digits vs ref 18.2828 (2026-10-13)
+    # digits vs ref 18.2828
     # fd of the reference gradient (y-weighted
     # Lagrangian for the NE variants) matches OUR Hessian and contradicts the
-    # reference's hand-coded H (2026-10-13; NE: fd-ref 0.085/0.07/0.0028 vs
+    # reference's hand-coded H (NE: fd-ref 0.085/0.07/0.0028 vs
     # fd-ours 2.5e-6/9e-8/9e-12)
 
 # ill-conditioned problems where the Fortran reference itself carries float
-# noise: BigFloat adjudication (2026-10-13) puts OUR Float64 at 7e-15 of the
+# noise: BigFloat adjudication puts OUR Float64 at 7e-15 of the
 # true value and CUTEst at 2.8e-6 (VANDERM3). Compared at a loosened 1e-4.
 # problems whose mastsif hand-coded VALUE function contradicts the SIF text:
 # independent transcription of HIMMELP6 (Float64 and 256-bit BigFloat) gives
@@ -57,7 +59,7 @@ const DERIV_REF_BUGS = Set(["EQC"])
 # to 5e-5 (28.0994 vs 28.1009) where the file-true value is 12.9583; a
 # 2-sample oracle with the same card pattern confirms per-iteration
 # semantics. Value/derivative comparisons are meaningless; meta/bounds
-# still strict. (2026-10-14)
+# still strict.
 const REF_DECODE_BUGS = Set(["LRW8A"])
 
 # name => loosened tolerance where 1e-4 is still too tight (adjudicated)
@@ -65,7 +67,7 @@ const REF_NOISE_TOL = Dict("SCOSINE" => 1e-2)   # 1e12 'SCALE' amplification:
     # ref grad noise measured 3.8e-4 at pert while ours matches BigFloat
 
 const REF_NOISE = Set(["VANDERM1", "VANDERM2", "VANDERM3", "VANDERM4",
-    # BigFloat adjudication at the pert point (2026-10-13): our Float64
+    # BigFloat adjudication at the perturbed point: our Float64
     # matches our 256-bit BigFloat while the reference drifts --
     # TRIGON2NE hess: ours 1.3e-14 vs ref 9.9e-6 of BigFloat;
     # SCOSINE obj: ours 1.8e-12 vs ref 1.1e-6 (1e12 'SCALE' amplification);
@@ -253,7 +255,7 @@ function check(name; tol = name in REF_NOISE ?
             if e > tol && (name in HESS_REF_BUGS || name in DERIV_REF_BUGS)
                 # mastsif ships erroneous hand-coded H lines for these; our
                 # Hessian matches finite differences of the REFERENCE gradient
-                # (adjudicated 2026-10-13: GULF fd-vs-CUTEst 7.94, fd-vs-ours
+                # (GULF fd-vs-CUTEst 7.94, fd-vs-ours
                 # 1.9e-5). Values/gradients/Jacobians still compared strictly.
             else
                 e <= tol || bad("hess@$tag (relerr $e)")

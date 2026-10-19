@@ -1,0 +1,9 @@
+# Coverage is reported, not enforced: the project and patch checks never fail.
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true

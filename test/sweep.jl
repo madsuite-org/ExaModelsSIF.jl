@@ -5,12 +5,13 @@
 # problems so the driver can restart Julia (bounds accumulated compilation
 # memory on this shared host).
 using ExaModelsSIF
-const DIR = get(ENV, "SIF_DIR", "/home/sushin/.julia/artifacts/1fa01d4c3b344b8cd32b8ef78c0abeac9bb9cce2")  # canonical: CUTEst_jll artifact
+# The collection directory: SIF_DIR, else MASTSIF.
+const DIR = get(() -> ENV["MASTSIF"], ENV, "SIF_DIR")
 const SHARD = parse(Int, get(ENV, "SWEEP_SHARD", "0"))
 const NSHARDS = parse(Int, get(ENV, "SWEEP_NSHARDS", "1"))
 const SUF = NSHARDS == 1 ? "" : ".$SHARD"
-const OUT = expanduser("~/git/pkg/ExaModelsSIF.jl/sweep_results$(SUF).tsv")
-const CUR = expanduser("~/git/pkg/ExaModelsSIF.jl/current$(SUF).txt")
+const OUT = joinpath(@__DIR__, "..", "sweep_results$(SUF).tsv")
+const CUR = joinpath(@__DIR__, "..", "current$(SUF).txt")
 const CHUNK = 150
 
 done = Set{String}()
@@ -47,10 +48,9 @@ function run_sweep()
                 nvar = length(P.varnames)
             catch err
                 if err isa ExaModelsSIF.ExternalFortranError
-                    # hand-coded Fortran: out of scope for this package since
-                    # 2026-10-14 (the oracle tier moved to ExaCUTEst.jl), so
+                    # hand-coded Fortran is out of scope for this package:
                     # record the class rather than trying to evaluate it
-                    status = "ORACLE_TIER"
+                    status = "EXTERNAL_FORTRAN"
                     detail = sprint(showerror, err)
                 else
                     status = "DECODE_FAIL"

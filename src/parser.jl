@@ -927,9 +927,8 @@ function sif_decode(path::AbstractString; loopfinal::Symbol = :last,
 
     # External Fortran: a type whose body calls an F-declared function is not
     # an expression and cannot be decoded. Raised rather than worked around,
-    # so this package never needs the compiled Fortran (ExaCUTEst.jl owns that
-    # tier; Sungho 2026-10-14, "it is not extension, it should be a separate
-    # repo").
+    # so this package never needs the compiled Fortran; ExaCUTEst.jl provides
+    # native implementations of the affected problems.
     # returns the offending Fortran function name, or nothing
     function checkexternal(tname, temps, fexpr, fdecls)
         isempty(fdecls) && return nothing

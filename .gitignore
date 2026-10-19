@@ -9,3 +9,10 @@ val_progress*.log
 sweep_results*.tsv
 test/Manifest.toml
 .nfs*
+
+# Local working files, kept out of the repository
+/STATUS.md
+/excluded.txt
+/skipped.txt
+/runs/
+lcov.info

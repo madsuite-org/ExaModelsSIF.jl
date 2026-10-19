@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [master, public-release]
+    tags: ['*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
+jobs:
+  test:
+    name: Julia ${{ matrix.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      actions: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['lts', '1']
+    steps:
+      - uses: actions/checkout@v4
+      # The tests compare against CUTEst.jl, which compiles each problem with
+      # the system gfortran.
+      - name: Install gfortran
+        run: command -v gfortran || (sudo apt-get update && sudo apt-get install -y gfortran)
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+      - uses: julia-actions/cache@v2
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+      - uses: julia-actions/julia-processcoverage@v1
+        if: matrix.version == '1'
+      # Coverage is informational (see codecov.yml): an upload failure does
+      # not fail the build.
+      - uses: codecov/codecov-action@v5
+        if: matrix.version == '1'
+        with:
+          files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: ${{ github.repository }}
+          fail_ci_if_error: false

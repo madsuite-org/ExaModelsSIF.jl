@@ -1,8 +1,7 @@
-# Validation environment: the harness needs CUTEst.jl as the Fortran
-# reference, which the package itself deliberately does not depend on (see
-# STATUS.md "Package boundary"). Run the harness with
+# Test environment. The harness needs CUTEst.jl as the Fortran reference,
+# which the package itself does not depend on. Pkg.test() uses this file;
+# the scripts run in it directly, e.g.
 #   julia --project=test test/pilot.jl
-# or let Pkg.test() assemble the same set from the root [extras]/[targets].
 [deps]
 CUTEst = "1b53aba6-35b6-5f92-a507-53c67d53f819"
 ExaModels = "1037b233-b668-4ce9-9b63-f9f681f55dd2"

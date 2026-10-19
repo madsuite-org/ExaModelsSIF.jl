@@ -1,10 +1,11 @@
 #!/bin/bash
 # Parallel restart-on-chunk / resume-on-crash driver for test/sweep.jl.
 # Usage: sweep_driver.sh [NSHARDS]   (default 8)
-# Env: SIF_DIR overrides the collection; SWEEP_ONLY=<file> restricts to names.
+# Env: SIF_DIR or MASTSIF names the collection; SWEEP_ONLY=<file> restricts to
+# names; JULIA overrides the julia executable.
 cd "$(dirname "$0")/.." || exit 1
 N=${1:-8}
-JULIA="$HOME/.juliaup/bin/julia"   # absolute: non-interactive ssh has no juliaup PATH
+JULIA="${JULIA:-julia}"
 onesweep() {
     local shard=$1
     for i in $(seq 1 60); do

@@ -1,16 +1,17 @@
 # test/valsweep.jl — full-collection VALIDATION sweep: every problem's values
 # and derivatives against the Fortran reference via test/pilot.jl's check().
-# Sharded/restartable like test/sweep.jl. External-Fortran problems evaluate
-# through the same CUTEst backend as the reference, so comparing them is
-# tautological: recorded as ORACLE_TIER without comparison.
+# Sharded/restartable like test/sweep.jl. External-Fortran problems cannot be
+# decoded and are recorded as EXTERNAL_FORTRAN without comparison.
+#
+#   julia --project=test test/valsweep.jl
 include(joinpath(@__DIR__, "pilot.jl"))
 
 const DIR2 = ENV["MASTSIF"]
 const SHARD = parse(Int, get(ENV, "SWEEP_SHARD", "0"))
 const NSHARDS = parse(Int, get(ENV, "SWEEP_NSHARDS", "1"))
 const SUF = ".val$SHARD"
-const OUT = expanduser("~/git/pkg/ExaModelsSIF.jl/val_results$(SUF).tsv")
-const CUR = expanduser("~/git/pkg/ExaModelsSIF.jl/current$(SUF).txt")
+const OUT = joinpath(@__DIR__, "..", "val_results$(SUF).tsv")
+const CUR = joinpath(@__DIR__, "..", "current$(SUF).txt")
 const CHUNK = 60
 
 done = Set{String}()
@@ -52,7 +53,7 @@ function run_valsweep()
                 end
             catch err
                 if err isa ExaModelsSIF.ExternalFortranError
-                    status = "ORACLE_TIER"
+                    status = "EXTERNAL_FORTRAN"
                 else
                     status = "ERROR"
                     detail = sprint(showerror, err)

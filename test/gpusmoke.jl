@@ -1,12 +1,11 @@
 # test/gpusmoke.jl — GPU backend smoke test: build each problem with
 # CUDABackend and compare obj/grad/cons/jac/hess against the (validated)
-# CPU model. Needs a CUDA-capable node and the env in the Pkg.activate line
-# (develop ExaModels + ExaModelsSIF, add CUDA/KernelAbstractions/NLPModels).
-# 13/13 PASS on 2x GV100 (2026-10-14); nonfinite patterns must match, finite
-# entries to 1e-6 (grad/cons/jac) and 1e-5 x max|H| (hess, GPU sum order).
-using Pkg; Pkg.activate(expanduser("~/git/scratch/gpuenv"))
+# CPU model. Needs a CUDA-capable device and an environment with ExaModels,
+# ExaModelsSIF, CUDA, KernelAbstractions and NLPModels, and ENV["MASTSIF"]
+# naming the SIF collection. Nonfinite patterns must match; finite entries
+# agree to 1e-6 (grad/cons/jac) and 1e-5 x max|H| (hess, GPU summation order).
 using ExaModelsSIF, ExaModels, CUDA, NLPModels, SparseArrays, LinearAlgebra
-const B = get(ENV, "MASTSIF", "/home/sushin/.julia/artifacts/1fa01d4c3b344b8cd32b8ef78c0abeac9bb9cce2")
+const B = ENV["MASTSIF"]
 # per-entry relative diff; CPU-nonfinite entries are compared by PATTERN
 # (GPU must be nonfinite there too), matching the validation convention
 function rel(a, b)

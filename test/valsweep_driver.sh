@@ -2,12 +2,12 @@
 # Parallel driver for test/valsweep.jl (same scheme as sweep_driver.sh).
 cd "$(dirname "$0")/.." || exit 1
 N=${1:-12}
-JULIA="$HOME/.juliaup/bin/julia"
+JULIA="${JULIA:-julia}"
 onesweep() {
     local shard=$1
     for i in $(seq 1 80); do
         SWEEP_SHARD=$shard SWEEP_NSHARDS=$N \
-            "$JULIA" --project=. --heap-size-hint=6G test/valsweep.jl \
+            "$JULIA" --project=test --heap-size-hint=6G test/valsweep.jl \
             >> "val_progress.$shard.log" 2>&1
         rc=$?
         echo "valdriver[$shard]: pass $i rc=$rc" >> "val_progress.$shard.log"
