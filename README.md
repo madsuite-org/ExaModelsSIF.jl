@@ -1,51 +1,86 @@
 # ExaModelsSIF.jl
 
-A pure-Julia SIF (Standard Input Format) decoder that converts CUTEst test
-problems directly into [ExaModels](https://github.com/exanauts/ExaModels.jl)
-models, so the CUTEst collection can be evaluated and differentiated natively
-on CPU and GPU backends without Fortran.
+ExaModelsSIF decodes optimization problems written in SIF, the Standard Input
+Format of the [CUTEst](https://github.com/ralna/CUTEst) test set, directly into
+[ExaModels](https://github.com/exanauts/ExaModels.jl) models. The resulting
+models are evaluated and differentiated in Julia, on the CPU or on any GPU
+backend ExaModels supports, with no Fortran compiler and no SIF preprocessor.
 
 ```julia
 using ExaModelsSIF
-m = sif_model("path/to/ROSENBR.SIF")           # -> ExaModels.ExaModel
-P = sif_decode("path/to/ROSENBR.SIF")          # -> instantiated problem IR
+
+m = sif_model("ROSENBR.SIF")                      # an ExaModels.ExaModel
+m = sif_model("ROSENBR.SIF"; T = Float32)         # any floating-point type
+m = sif_model("DIXMAANA1.SIF"; backend = CUDABackend())   # on a GPU (using CUDA)
+
+P = sif_decode("DIXMAANA1.SIF"; params = Dict("M" => 1000))  # the decoded problem
 ```
+
+For the CUTEst collection itself, with problem selection by name and
+classification, use [ExaCUTEst.jl](https://github.com/madsuite-org/ExaCUTEst.jl),
+which is built on this package.
 
 ## How it works
 
-SIF is group-partially-separable: every function is
-`GF(scale^-1 * (sum_j a_j x_j + sum_e w_e f_e(x_e) - b))`, and all
-elements/groups of one TYPE share one algebraic expression. The decoder:
+SIF describes a problem as group partially separable: each objective term and
+each constraint is a group function applied to a scaled sum of linear terms and
+nonlinear elements, and all elements or groups of one type share one algebraic
+expression. The decoder
 
-1. interprets the SIF data sections (fixed-field cards, DO loops, integer/real
-   parameter arithmetic, array names) into a fully instantiated IR;
-2. translates the restricted-Fortran `F =` expressions of the
-   ELEMENTS/GROUPS sections into Julia ASTs (derivatives come from ExaModels'
-   own AD, so `G`/`H` lines are ignored);
-3. buckets elements and groups by type signature and emits one ExaModels
-   generator per bucket — the SIMD abstraction — via `add_var`/`add_obj`/
-   `add_con`/`add_con!`.
+1. interprets the SIF data sections (fixed-field cards, `DO` loops, integer and
+   real parameter arithmetic, array names) into a fully instantiated
+   representation of the problem;
+2. translates the Fortran expressions of the element and group sections into
+   Julia expressions; derivatives come from ExaModels' automatic
+   differentiation, so the hand-coded `G` and `H` lines are not used;
+3. groups elements and groups by type signature and emits one ExaModels
+   generator per group of instances, which is the SIMD form ExaModels compiles
+   into a single kernel.
 
-Constraint rows keep natural SIF group order. The group constant is folded
-into the constraint value (CUTEst convention), internal variables (`R` range
-transformations) are substituted as linear combinations at trace time, and
-the `QUADRATIC` section is emitted as Hessian-entry terms.
+Constraint rows keep SIF group order. The group constant is folded into the
+constraint value, following the CUTEst convention. Internal variables are
+substituted as linear combinations, and the `QUADRATIC` section is emitted as
+Hessian terms. Groups too wide to trace as one kernel are lowered through
+buffered subexpressions and a reduction.
 
-Clean-room implementation from the published SIF reference
-(https://www.numerical.rl.ac.uk/lancelot/sif/); no SIFDecode/CUTEst source
-was consulted.
+The decoder is implemented from the published
+[SIF reference](https://www.numerical.rl.ac.uk/lancelot/sif/).
 
-## Validation
+## Coverage and validation
 
-`test/pilot.jl` compares every decoded model against CUTEst.jl (Fortran
-reference): nvar/ncon, x0, variable and constraint bounds, objective,
-gradient, constraints, Jacobian, and Lagrangian Hessian at x0 and a perturbed
-point. 22/22 pilot problems pass. `test/sweep.jl` decodes + builds the whole
-local collection and writes `sweep_results.tsv`.
+The CUTEst collection distributed with CUTEst.jl v1.4.0 has 1548 problems.
+1514 of them decode and build, and each is compared against the compiled
+Fortran through CUTEst.jl: objective, gradient, constraints, Jacobian and
+Lagrangian Hessian at the starting point and at a perturbed point, together
+with sizes, starting point and bounds. All 1514 agree.
 
-## Reproducibility
+The other 34 append hand-written Fortran routines to their SIF files, which a
+decoder cannot translate. For these, `sif_decode` raises `ExternalFortranError`
+by default, and `external = :defer` returns the decoded structure with those
+element types left for the caller to supply. ExaCUTEst.jl provides native Julia
+implementations of all 34.
 
-All scripts run under the project environment (`julia --project=.`); the
-committed `Manifest.toml` pins every dependency. `ExaModels` is consumed as
-a path source (`~/git/pkg/ExaModels.jl`, shared across the cluster via NFS);
-the validated revision is madsuite-org/ExaModels.jl branch compile-time-prototypes, commit `fe407fc0968ac52762965f57a1f10767ad9da5d9` (worktree ~/git/worktrees/ExaModels-ctp). See STATUS.md.
+A few disagreements with the reference turned out to be defects in the
+reference problems, reported upstream as
+[SIFDecode#55](https://github.com/ralna/SIFDecode/issues/55) and
+[#56](https://github.com/ralna/SIFDecode/issues/56). In several others the
+SIF file's hand-coded Hessian contradicts a finite difference of its own
+gradient; the validation adjudicates those against that finite difference.
+
+`test/pilot.jl` runs the comparison against CUTEst.jl, and `test/eltype.jl`
+checks that a model built at element type `T` computes in `T` throughout.
+
+## Installation
+
+ExaModelsSIF is not yet registered, and it needs the `sif-integration`
+branch of [madsuite-org/ExaModels.jl](https://github.com/madsuite-org/ExaModels.jl),
+which carries changes not yet in a released ExaModels. Install that branch
+first, since Pkg does not follow a dependency's own `[sources]`:
+
+```julia
+using Pkg
+Pkg.add(url = "https://github.com/madsuite-org/ExaModels.jl", rev = "sif-integration")
+Pkg.add(url = "https://github.com/madsuite-org/ExaModelsSIF.jl")
+```
+
+No CUTEst Fortran or C source is included or distributed.
