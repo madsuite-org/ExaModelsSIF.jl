@@ -11,9 +11,9 @@
 # return value that is a bare scalar, so it is the one reading that exposes
 # the data tables' type.
 using ExaModelsSIF, ExaModels, NLPModels, Test
+import CUTEst   # sets ENV["MASTSIF"] to its SIF collection unless already set
 
-const ART = get(ENV, "MASTSIF",
-    "/home/sushin/.julia/artifacts/1fa01d4c3b344b8cd32b8ef78c0abeac9bb9cce2")
+const ART = ENV["MASTSIF"]
 
 # Chosen to cover the distinct emit paths in `build_exa`, since each builds its
 # own data rows: a plain objective group, linear and nonlinear constraint rows,

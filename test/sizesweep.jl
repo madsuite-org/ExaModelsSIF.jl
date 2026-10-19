@@ -1,7 +1,9 @@
 # test/sizesweep.jl — $-PARAMETER override validation: decode with the
 # params kwarg vs CUTEst sifdecoder -param, compared like check().
-# 11/11 PASS 2026-10-14 (FMINSURF P=16 excluded: sifdecoder only accepts
-# LISTED parameter values; ours accepts any, by design).
+# sifdecoder accepts only the parameter values a SIF file lists, while the
+# decoder accepts any; FMINSURF P=16 is therefore compared only on our side.
+#
+#   julia --project=test test/sizesweep.jl
 include(joinpath(@__DIR__, "pilot.jl"))
 using LinearAlgebra, Random
 
