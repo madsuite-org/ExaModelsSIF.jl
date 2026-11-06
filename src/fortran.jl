@@ -96,13 +96,19 @@ _qlog(x::Real) = x <= 0 ? oftype(float(x), NaN) : log(x)
 # reference H is exactly 0 there). _zmul likewise kills NaN * 0 from
 # _qlog(0) in the exponent partials. Negative base stays NaN as in _fpow.
 _dpow(x::Real, y::Real) = (iszero(x) && y < 0) ? zero(float(x)) : _fpow(x, y)
+# Product of two partials that is zero if either factor is, even when the other is
+# Inf or NaN.
+@inline function _zmul(a, b)
+    p = a * b
+    return ifelse(iszero(a) | iszero(b), zero(p), p)
+end
 ExaModels.@register_bivariate(
     _fpow,
     (x, y) -> y * _dpow(x, y - 1),
-    (x, y) -> ExaModels._zmul(_qlog(x), _fpow(x, y)),
+    (x, y) -> _zmul(_qlog(x), _fpow(x, y)),
     (x, y) -> y * (y - 1) * _dpow(x, y - 2),
-    (x, y) -> _dpow(x, y - 1) + y * ExaModels._zmul(_dpow(x, y - 1), _qlog(x)),
-    (x, y) -> ExaModels._zmul(_qlog(x)^2, _fpow(x, y)),
+    (x, y) -> _dpow(x, y - 1) + y * _zmul(_dpow(x, y - 1), _qlog(x)),
+    (x, y) -> _zmul(_qlog(x)^2, _fpow(x, y)),
 )
 
 "Marker wrapping the value of an I-declared (Fortran INTEGER) temporary: `**`
@@ -250,15 +256,18 @@ function _fprod(args)
     return reduce(*, out)
 end
 
+# `isinteger` on a value of unknown type, in this image rather than by dispatch into Base.
+_isint(x) = isinteger(x)
+
 function fapply(op::Symbol, args)
     if op === :^
         b, p = _unint(args[1]), args[2]
         if p isa IntVal
             pv = p.v
-            (pv isa Number && isinteger(pv)) && return b^Int(pv)
+            (pv isa Number && _isint(pv)) && return b^Int(pv)
             return _npow(b, pv)
         end
-        (p isa Number && isinteger(p)) && return b^Int(p)
+        (p isa Number && _isint(p)) && return b^Int(p)
         # Fortran X**Y with real Y is only defined for X > 0; Julia ^ THROWS
         # for a negative base. _fpow is quiet (NaN for X < 0) with exact
         # derivatives at X = 0 (the exp/log(abs) rewrite used before had
