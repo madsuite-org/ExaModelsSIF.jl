@@ -155,6 +155,6 @@ ExaModels' calling convention.
 
 ## Dependencies
 
-ExaModelsSIF needs the `sif-integration` branch of madsuite-org/ExaModels.jl,
-declared in `[sources]` of both `Project.toml` and `test/Project.toml`. The
+ExaModelsSIF needs ExaModels 0.15, pinned to a commit of madsuite-org/ExaModels.jl
+`main` and declared in `[sources]` of both `Project.toml` and `test/Project.toml`. The
 tracked `Manifest.toml` pins the revision tested.

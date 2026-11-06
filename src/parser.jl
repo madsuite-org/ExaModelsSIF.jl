@@ -91,9 +91,10 @@ struct Card
     expr::String   # raw text from col 25 to EOL (for A/F/G/H lines)
 end
 
-function card(ln::AbstractString)
-    di = findfirst(" \$", ln)
-    di !== nothing && (ln = ln[1:first(di)-1])
+function card(raw::AbstractString)
+    # Assigned once: the closures below capture `ln`, and a reassigned capture is boxed.
+    di = findfirst(" \$", raw)
+    ln = di === nothing ? raw : raw[1:first(di)-1]
     L = lastindex(ln)
     g(a, b) = a <= L ? String(strip(ln[a:min(b, L)])) : ""
     # (name, value) pairs: the name is the 10-column name subfield verbatim
@@ -125,6 +126,9 @@ function card(ln::AbstractString)
     Card(g(2, 3), g(5, 14), f3, f4, f5, f6,
          L >= 25 ? String(rstrip(ln[25:L])) : "")
 end
+
+# Reassigned captures reach this by runtime dispatch; the `push!` stays static inside it.
+_pushtemp!(v::Vector{Pair{Symbol,Any}}, name, val) = push!(v, Pair{Symbol,Any}(name, val))
 
 issectionline(ln) = !isempty(ln) && !isspace(ln[1]) && ln[1] != '*'
 
@@ -819,13 +823,13 @@ function parse_funpart(lines, isgroup::Bool)
     function flushpend!()
         isempty(pend_code) && return
         if pend_code == "A"
-            push!(section == "GLOBALS" ? temps_global : curtemps,
-                  pend_name => fparse(pend_expr))
+            _pushtemp!(section == "GLOBALS" ? temps_global : curtemps, pend_name,
+                       fparse(pend_expr))
         elseif pend_code == "F"
             curf = fparse(pend_expr)
         elseif pend_code == "I" || pend_code == "E"
-            push!(curtemps, pend_name =>
-                CondAssign(pend2, pend_code == "I", fparse(pend_expr)))
+            _pushtemp!(curtemps, pend_name,
+                       CondAssign(pend2, pend_code == "I", fparse(pend_expr)))
         end
         pend_code = ""
     end

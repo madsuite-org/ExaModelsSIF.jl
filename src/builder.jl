@@ -10,14 +10,14 @@ const QUADCONV = Ref(:half)
 
 # Nontrivial groups wider than WIDE_LIN linear terms (or ELEM_BUDGET element
 # fields) route the wide part through buffered subexpressions
-# (add_expr(...; buffered = true), ExaModels compile-time-prototypes branch):
+# (add_expr(...; buffered = true)):
 # partial sums evaluated once per group into a theta-backed stage, so no traced
 # kernel grows with the group's width. Measured on 002: L=200 monolithic kernel
 # needs hours; chunked+buffered builds in ~16 s with exact derivatives.
 # Low threshold: inlining the linear part creates one traced kernel per
 # DISTINCT (group type, L) pair, and problems like LRW1A carry ~70 distinct
 # widths of an expensive group type (hours of compilation). Beyond L=4 the
-# linear part rides the add_reduce lowering, so all widths of a group type
+# linear part rides the add_expr! lowering, so all widths of a group type
 # collapse into one bucket.
 const WIDE_LIN = 4
 const ELEM_BUDGET = 40     # max element data fields traced in one kernel
@@ -55,10 +55,10 @@ function elplan(et::ElType)
     symbolic = Pair{Symbol,Any}[]
     for (nm, ent) in et.temps
         if all(d -> d in pset || d in ponames, entdeps(ent))
-            push!(paramonly, nm => ent)
+            _pushtemp!(paramonly, nm, ent)
             push!(ponames, nm)
         else
-            push!(symbolic, nm => ent)
+            _pushtemp!(symbolic, nm, ent)
         end
     end
     used = et.fexpr === nothing ? Set{Symbol}() : freesyms(et.fexpr)
@@ -511,7 +511,7 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing, prod = :auto,
     end
 
     # --- emit a wide bucket: buffer all elements per type, build each group's
-    # argument with one add_reduce (terms are data: O(1) kernel types however
+    # argument with one add_expr! (terms are data: O(1) kernel types however
     # many elements/linear terms a group carries), finish with one tiny kernel.
     emitwide = function (sig, bucket, iscon)
         ets, epls, heads, elemrows, lins = bucket
@@ -559,7 +559,9 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing, prod = :auto,
             end
         end
         local alpha
-        c, alpha = ExaModels.add_reduce(c, m, terms)   # -b applied in the final kernel
+        # -b is applied in the final kernel.
+        c, alpha = ExaModels.add_expr(c, Base.Generator(_ -> zero(T), 1:m); buffered = true)
+        c, _ = ExaModels.add_expr!(c, alpha, terms)
         hnames = Symbol[]
         iscon && push!(hnames, :i)
         push!(hnames, :si); push!(hnames, :sinv); push!(hnames, :b)

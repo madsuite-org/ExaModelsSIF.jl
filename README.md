@@ -84,14 +84,14 @@ checks that a model built at element type `T` computes in `T` throughout.
 
 ## Installation
 
-ExaModelsSIF is not yet registered, and it needs the `sif-integration`
-branch of [madsuite-org/ExaModels.jl](https://github.com/madsuite-org/ExaModels.jl),
-which carries changes not yet in a released ExaModels. Install that branch
-first, since Pkg does not follow a dependency's own `[sources]`:
+ExaModelsSIF is not yet registered, and it needs ExaModels 0.15, which is on the
+`main` branch of [madsuite-org/ExaModels.jl](https://github.com/madsuite-org/ExaModels.jl)
+and in no release. Install that commit first, since Pkg does not follow a
+dependency's own `[sources]`:
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/madsuite-org/ExaModels.jl", rev = "sif-integration")
+Pkg.add(url = "https://github.com/madsuite-org/ExaModels.jl", rev = "e61ec619032821b82fb179be8b7c1e71c579ec03")
 Pkg.add(url = "https://github.com/madsuite-org/ExaModelsSIF.jl")
 ```
 
