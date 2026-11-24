@@ -46,3 +46,16 @@ const PROBLEMS = ("ROSENBR", "HS14", "HS35", "WATSON", "BROWNAL", "GULF",
     # the conversion is in place, so on its own it cannot witness the property.
     @test length(PROBLEMS) == 8
 end
+
+# `sif_core` is the core `sif_model` wraps: the same model once `ExaModel` is called on it.
+@testset "sif_core" begin
+    for nm in ("ROSENBR", "HS14")
+        path = joinpath(ART, nm * ".SIF")
+        m, c = ExaModelsSIF.sif_model(path), ExaModelsSIF.sif_core(path)
+        @test c isa ExaModels.ExaCore
+        mc = ExaModel(c)
+        x = m.meta.x0
+        @test (mc.meta.nvar, mc.meta.ncon) == (m.meta.nvar, m.meta.ncon)
+        @test mc.meta.x0 == x && obj(mc, x) == obj(m, x) && grad(mc, x) == grad(m, x)
+    end
+end
