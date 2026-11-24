@@ -336,6 +336,17 @@ function sif_model(path::AbstractString; T = Float64, backend = nothing,
 end
 
 """
+    sif_core(path; T = Float64, backend = nothing, params = Dict(), loopfinal = :last)
+        -> ExaCore
+
+Decode a SIF file and build its `ExaCore`, the model [`sif_model`](@ref) returns
+before `ExaModels.ExaModel` is called on it.
+"""
+function sif_core(path::AbstractString; T = Float64, backend = nothing, kwargs...)
+    return build_core(sif_decode(path; kwargs...); T, backend)
+end
+
+"""
     build_exa(P::SIFProblem; T = Float64, backend = nothing, prod = :auto,
               element_fns = Dict()) -> ExaModel
 
@@ -346,6 +357,20 @@ Build an ExaModel from a decoded problem.
 """
 function build_exa(P::SIFProblem; T = Float64, backend = nothing, prod = :auto,
                    element_fns::AbstractDict = _NO_FNS)
+    c = build_core(P; T, backend, element_fns)
+    return ExaModels.ExaModel(c; prod = prodflag(prod, c))
+end
+
+"""
+    build_core(P::SIFProblem; T = Float64, backend = nothing,
+               element_fns = Dict()) -> ExaCore
+
+Build the `ExaCore` of a decoded problem: the model [`build_exa`](@ref) returns,
+before `ExaModels.ExaModel` is called on it. ExaModelsCompiler compiles a core,
+not a model, so this is what `compile_library` takes.
+"""
+function build_core(P::SIFProblem; T = Float64, backend = nothing,
+                    element_fns::AbstractDict = _NO_FNS)
     fns = Dict{String,Any}(String(k) => v for (k, v) in element_fns)
     for (tname, fn) in P.external_types
         startswith(tname, "G#") && error(
@@ -639,5 +664,5 @@ function build_exa(P::SIFProblem; T = Float64, backend = nothing, prod = :auto,
         c, _ = ExaModels.add_obj(c, Base.Generator(d -> d.k, [(k = T(objconst),)]))
     end
 
-    return ExaModels.ExaModel(c; prod = prodflag(prod, c))
+    return c
 end
